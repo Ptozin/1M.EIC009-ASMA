@@ -6,6 +6,7 @@ ifeq ($(OS),Windows_NT)
     VENV = venv
     SEP = \\
     RM = - rd /s /q
+    SCRIPTS = Scripts
 else
     # Unix/Linux settings
     PYTHON = python3
@@ -13,6 +14,7 @@ else
     VENV = venv
     SEP = /
     RM = rm -rf
+    SCRIPTS = bin
 endif
 
 # Main target
@@ -26,8 +28,8 @@ venv:
 install: venv
 	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PIP) install -r requirements.txt
 
-run_client_1:
-	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) client$(SEP)client1.py
+run:
+	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)agent.py
 
 # Clean up generated files and virtual environment
 clean:
