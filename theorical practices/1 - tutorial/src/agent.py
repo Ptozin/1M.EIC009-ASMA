@@ -1,4 +1,5 @@
 import spade
+from create_user import ProsodyClient
 
 class DummyAgent(spade.agent.Agent):
     async def setup(self):
@@ -10,3 +11,5 @@ async def main():
 
 if __name__ == "__main__":
     spade.run(main())
+    client = ProsodyClient(container_id="123456789abcdef")
+    client.create_user("user_1")

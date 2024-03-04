@@ -27,6 +27,7 @@ venv:
 # Install project dependencies
 install: venv
 	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PIP) install -r requirements.txt
+	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PIP) install -e ..$(SEP)prosody_guide$(SEP)misc$(SEP)
 
 run:
 	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)agent.py
