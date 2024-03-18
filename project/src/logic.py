@@ -45,6 +45,12 @@ class DeliveryLogic:
                 orders
             ) for warehouse, orders in warehouses
         ]
+
+        """
+        
+        Now we can start the agents and pray they work as expected.
+        
+        """
         
 
     def __exit__(self, exc_type, exc_value, traceback):
