@@ -1,7 +1,7 @@
 from spade.agent import Agent
 
 class WarehouseAgent(Agent):
-    def __init__(self, jid, password):
+    def __init__(self, jid, password = "admin"):
         super().__init__(jid, password)
         self.inventory = {}
 

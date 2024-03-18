@@ -35,6 +35,8 @@ run:
 # Clean up generated files and virtual environment
 clean:
 	$(RM) venv
+    $(RM) src$(SEP)__pycache__
+    $(RM) __pycache__
 
 # PHONY targets (targets that don't represent files)
 .PHONY: all venv install clean
