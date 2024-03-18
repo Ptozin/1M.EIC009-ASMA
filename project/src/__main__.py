@@ -20,6 +20,10 @@ def parse_delivery_drones(delivery_drones) -> list[dict]:
     return delivery_drones.to_dict('records')
 
 def parse_warehouses_and_orders(warehouses) -> list[dict]:
+
+    warehouses['latitude'] = warehouses['latitude'].str.replace(',', '.').astype(float)
+    warehouses['longitude'] = warehouses['longitude'].str.replace(',', '.').astype(float)
+
     return warehouses.head(1).to_dict('records'), warehouses.iloc[1: , :].to_dict('records')
 
 def main() -> None:
