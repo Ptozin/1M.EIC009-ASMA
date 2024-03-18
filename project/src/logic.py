@@ -1,4 +1,5 @@
-
+import warehouse_agent
+import drone_agent
 
 class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses, orders):
@@ -14,8 +15,8 @@ class DeliveryLogic:
         """
 
         print(delivery_drones)
-        print(warehouses)
-        print(orders)
+        #print(warehouses)
+        #print(orders)
 
     def get_data(self):
         return self.data

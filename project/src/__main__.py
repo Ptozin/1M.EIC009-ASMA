@@ -17,6 +17,11 @@ def create_agents(agents_uids : list[str]):
             prosody_client.create_user(username=agent_uid, password=prosody_password)
 
 def parse_delivery_drones(delivery_drones) -> list[dict]:
+
+    delivery_drones['capacity'] = delivery_drones['capacity'].str.strip('kg').astype(int)
+    delivery_drones['autonomy'] = delivery_drones['autonomy'].str.strip('Km').astype(int) * 1_000
+    delivery_drones['velocity'] = delivery_drones['velocity'].str.strip('m/s').astype(int)
+
     return delivery_drones.to_dict('records')
 
 def parse_warehouses_and_orders(warehouses) -> list[dict]:
