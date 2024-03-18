@@ -44,11 +44,13 @@ class ProsodyClient:
             print("ProsodyClient: Cannot create User - no username provided.")
             raise ValueError("ProsodyClient: No username provided.")
         
-        command = f"prosodyctl about {username}@{self.domain}"
-        exit_code, output = self.container.exec_run(command)
-        if exit_code == 0:
-            print(f"ProsodyClient: Cannot create User - `{username}` already exists.")
-            return
+        print('Ignoring verification of user existence')
+        # The following code is commented because it is not working as expected
+        # command : str = f"prosodyctl about {username}@{self.domain}"
+        # exit_code, output = self.container.exec_run(command)
+        # if exit_code == 0:
+        #     print(f"ProsodyClient: Cannot create User - `{username}` already exists.")
+        #     return
         
         command = f"prosodyctl register {username} {self.domain} {password}"
         exit_code, output = self.container.exec_run(command)

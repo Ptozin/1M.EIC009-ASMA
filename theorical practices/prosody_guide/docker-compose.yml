@@ -17,4 +17,5 @@ services:
     volumes:
       - ./prosody/logs:/var/log/prosody
       - ./prosody/modules:/usr/lib/prosody-modules
+      - ./prosody/certs:/usr/local/etc/prosody/certs
     restart: always
