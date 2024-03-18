@@ -36,6 +36,9 @@ class ProsodyClient:
 
         print(f"ProsodyClient: Successfuly connected to container {self.container.name}")
 
+    def __enter__(self):
+        return self
+
     def create_user(self, username: str = "", password: str = "admin") -> None:
         if username == "":
             print("ProsodyClient: Cannot create User - no username provided.")
@@ -54,6 +57,10 @@ class ProsodyClient:
             print(f"ProsodyClient: User {username} created successfully.")
         else:
             print(f"ProsodyClient: Failed to create user {username}: {output.decode('utf-8')}")
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.client.close()
+        print(f"ProsodyClient: Connection to container {self.container.name} closed.")
 
 """
 Example of usage:
