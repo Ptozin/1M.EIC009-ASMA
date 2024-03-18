@@ -7,6 +7,10 @@ class DroneAgent(Agent):
         self.autonomy = autonomy
         self.velocity = velocity
 
+        self.curr_weight = 0
+        self.curr_autonomy = autonomy
+        self.tracking_orders = []
+
     async def setup(self):
         print("[DRONE] Hello, I'm agent {}".format(str(self.jid)))
         print("Capacity:", self.capacity)
