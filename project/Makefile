@@ -32,6 +32,9 @@ install: venv
 run:
 	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py
 
+visualization:
+	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization.py
+
 # Clean up generated files and virtual environment
 
 clean:
