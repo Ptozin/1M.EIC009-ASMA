@@ -1,3 +1,5 @@
 spade
 docker
 pandas
+dash
+requests

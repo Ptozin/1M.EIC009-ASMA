@@ -3,7 +3,6 @@ ifeq ($(OS),Windows_NT)
     # Windows settings
     PYTHON = python
     PIP = pip
-    VENV = venv
     SEP = \\
     RM = - rd /s /q
     SCRIPTS = Scripts
@@ -11,7 +10,6 @@ else
     # Unix/Linux settings
     PYTHON = python3
     PIP = pip3
-    VENV = venv
     SEP = /
     RM = rm -rf
     SCRIPTS = bin
@@ -22,20 +20,24 @@ all: install
 
 # Create a virtual environment
 venv:
-	$(PYTHON) -m $(VENV) venv
+	uv venv
+	.venv$(SEP)$(SCRIPTS)$(SEP)activate
 
-# Install project dependencies
+# Install project dependencies using uv
 install: venv
-	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PIP) install -r requirements.txt
-	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PIP) install -e ..$(SEP)'theorical practices'$(SEP)prosody_guide$(SEP)misc$(SEP)
+	uv $(PIP) install -r requirements.txt
+	uv $(PIP) install -e ..$(SEP)'theorical practices'$(SEP)prosody_guide$(SEP)misc$(SEP)
 
 run:
-	.$(SEP)venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py
+
+visualization:
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization.py
 
 # Clean up generated files and virtual environment
 
 clean:
-	$(RM) venv
+	$(RM) .venv
 	$(RM) src$(SEP)__pycache__
 	$(RM) __pycache__
 
