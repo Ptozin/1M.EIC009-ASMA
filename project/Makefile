@@ -26,7 +26,7 @@ venv:
 # Install project dependencies using uv
 install: venv
 	uv $(PIP) install -r requirements.txt
-	uv $(PIP) install -e ..$(SEP)'theorical practices'$(SEP)prosody_guide$(SEP)misc$(SEP)
+	uv $(PIP) install -e src$(SEP)misc$(SEP)
 
 run:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py
