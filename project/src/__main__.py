@@ -18,14 +18,18 @@ def create_agents(agents_uids : list[str]):
 
 def parse_delivery_drones(delivery_drones) -> list[dict]:
 
+    delivery_drones['id'] = delivery_drones['id'].astype(str) + '@localhost'
+    delivery_drones['password'] = delivery_drones['id'].astype(str)
     delivery_drones['capacity'] = delivery_drones['capacity'].str.strip('kg').astype(int)
     delivery_drones['autonomy'] = delivery_drones['autonomy'].str.strip('Km').astype(int) * 1_000
     delivery_drones['velocity'] = delivery_drones['velocity'].str.strip('m/s').astype(int)
+    delivery_drones['initialPos'] = delivery_drones['initialPos'].astype(str)
 
     return delivery_drones.to_dict('records')
 
 def parse_warehouses_and_orders(warehouses) -> list[dict]:
 
+    warehouses['id'] = warehouses['id'].astype(str) + '@localhost'
     warehouses['latitude'] = warehouses['latitude'].str.replace(',', '.').astype(float)
     warehouses['longitude'] = warehouses['longitude'].str.replace(',', '.').astype(float)
 
@@ -56,7 +60,7 @@ def main() -> None:
                 + [warehouse_1_fields['id'].head(1).values[0]] \
                 + [warehouse_2_fields['id'].head(1).values[0]]
                 
-        # create_agents(agents_uids)
+        create_agents(agents_uids)
 
         # Setup delivery drones
         delivery_drones : list[dict] = parse_delivery_drones(delivery_drones_fields)

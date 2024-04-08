@@ -1,5 +1,6 @@
 import warehouse_agent
 import drone_agent
+import spade
 
 class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
@@ -32,10 +33,10 @@ class DeliveryLogic:
         self.delivery_drones = [
             drone_agent.DroneAgent(
                 drone["id"],
-                drone["password"],
                 drone["capacity"],
                 drone["autonomy"],
-                drone["velocity"]
+                drone["velocity"],
+                drone["initialPos"]
             ) for drone in delivery_drones
         ]
 
@@ -49,10 +50,15 @@ class DeliveryLogic:
         ]
 
         """
-        
         Now we can start the agents and pray they work as expected.
-        
         """
+        spade.run(self.start_agents())
+
+    async def start_agents(self):
+        for drone in self.delivery_drones:
+            await drone.start()
+        for warehouse in self.warehouses:
+            await warehouse.start()
         
 
     def __exit__(self, exc_type, exc_value, traceback):

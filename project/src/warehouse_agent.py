@@ -2,9 +2,8 @@ from spade.agent import Agent
 from order import DeliveryOrder
 
 class WarehouseAgent(Agent):
-    password = "admin"
-
     def __init__(self, jid, latitude, longitude, orders):
+        self.password = 'admin' # TO-DO: receive main unique password
         super().__init__(jid, self.password)
         self.latitude = latitude
         self.longitude = longitude
@@ -23,7 +22,7 @@ class WarehouseAgent(Agent):
         for order in orders:
             create_order(order)
 
-        print("Setup warehouse agent", self.jid, "with ", len(self.inventory.keys()), " orders")
-
     async def setup(self):
         print("[WAREHOUSE] Hello, I'm agent {}".format(str(self.jid)))
+        print("Latitude:", self.latitude)
+        print("Longitude:", self.longitude)

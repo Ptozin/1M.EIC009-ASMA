@@ -1,11 +1,13 @@
 from spade.agent import Agent
 
 class DroneAgent(Agent):
-    def __init__(self, jid, password = "admin", capacity = 0, autonomy = 0, velocity = 0):
-        super().__init__(jid, password)
+    def __init__(self, jid, capacity = 0, autonomy = 0, velocity = 0, initialPos = None):
+        self.password = 'admin' # TO-DO: receive main unique password
+        super().__init__(jid, self.password)
         self.capacity = capacity
         self.autonomy = autonomy
         self.velocity = velocity
+        self.initialPos = initialPos
 
         self.curr_weight = 0
         self.curr_autonomy = autonomy
@@ -16,6 +18,7 @@ class DroneAgent(Agent):
         print("Capacity:", self.capacity)
         print("Autonomy:", self.autonomy)
         print("Velocity:", self.velocity)
+        print("Initial Position:", self.initialPos)
 
     # Add drone behaviours here
     # ...
