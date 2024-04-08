@@ -24,3 +24,19 @@ Please alter the file `data/global_variables.json` with the correct container id
 }
 ```
 
+Then, in order to run the project you should have python installed in your machine and the `uv` package in order to install the project's dependencies:
+```bash
+pip install uv
+```
+
+After that, you can run the project by executing the following command:
+```bash
+make
+
+# wait for the dependencies to be installed in the .venv folder --
+
+make run # to run the project
+
+make visualization # visualize the simulation in the browser on a map
+```
+
