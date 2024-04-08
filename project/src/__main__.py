@@ -1,5 +1,5 @@
 import json, pandas as pd
-from create_user import ProsodyClient
+from misc.create_user import ProsodyClient
 from logic import DeliveryLogic
 
 def create_agents(agents_uids : list[str]):
@@ -40,11 +40,22 @@ def main() -> None:
         warehouse_1_fields : pd = pd.read_csv('data/delivery_center1.csv', delimiter=';')
         warehouse_2_fields : pd = pd.read_csv('data/delivery_center2.csv', delimiter=';')
 
-        # Assuming that the agents' have unique ids - uids
+        """
+        Assuming that the agents' have unique ids - uids
+        this will create the users in the prosody server in the format:
+        ```plaintext
+            drone_1, 
+            drone_2,
+            ..., 
+            drone_x, 
+            warehouse_1, 
+            warehouse_2
+        ```
+        """
         agents_uids : list[str] = delivery_drones_fields['id'].to_list() \
                 + [warehouse_1_fields['id'].head(1).values[0]] \
                 + [warehouse_2_fields['id'].head(1).values[0]]
-
+                
         # create_agents(agents_uids)
 
         # Setup delivery drones
