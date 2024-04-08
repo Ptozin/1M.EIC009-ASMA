@@ -52,15 +52,21 @@ class DeliveryLogic:
         """
         Now we can start the agents and pray they work as expected.
         """
-        spade.run(self.start_agents())
+        spade.run(self.start_logic())
 
-    async def start_agents(self):
+    async def start_logic(self):
+        # basic test
         for drone in self.delivery_drones:
             await drone.start()
+            break
+
         for warehouse in self.warehouses:
             await warehouse.start()
+            break
         
-
+        drone = self.delivery_drones[0]
+        await spade.wait_until_finished(drone)
+        
     def __exit__(self, exc_type, exc_value, traceback):
         for drone in self.delivery_drones:
             drone.stop()
