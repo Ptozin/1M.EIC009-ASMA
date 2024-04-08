@@ -5,6 +5,7 @@ class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
         """
         The warehouses & orders data should be in the following format:
+        ```
         [
             (
                 { // warehouse data
@@ -25,6 +26,7 @@ class DeliveryLogic:
             ),
             ...
         ]
+        ```
         """
 
         self.delivery_drones = [
