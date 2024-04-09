@@ -29,7 +29,9 @@ def parse_delivery_drones(delivery_drones) -> list[dict]:
 
 def parse_warehouses_and_orders(warehouses) -> list[dict]:
 
-    warehouses['id'] = warehouses['id'].astype(str) + '@localhost'
+    warehouses.loc[0, 'id'] = warehouses.loc[0, 'id'] + '@localhost'
+    warehouses['id'] = warehouses['id'].astype(str)
+
     warehouses['latitude'] = warehouses['latitude'].str.replace(',', '.').astype(float)
     warehouses['longitude'] = warehouses['longitude'].str.replace(',', '.').astype(float)
 

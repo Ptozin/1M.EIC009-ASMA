@@ -58,6 +58,7 @@ class DeliveryLogic:
         # basic test
         for drone in self.delivery_drones:
             await drone.start()
+            drone.web.start(hostname="localhost", port=10000)
             break
 
         for warehouse in self.warehouses:
@@ -66,6 +67,7 @@ class DeliveryLogic:
         
         drone = self.delivery_drones[0]
         await spade.wait_until_finished(drone)
+        await drone.stop()
         
     def __exit__(self, exc_type, exc_value, traceback):
         for drone in self.delivery_drones:
