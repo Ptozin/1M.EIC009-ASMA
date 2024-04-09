@@ -38,7 +38,7 @@ def parse_delivery_drones(delivery_drones : pd.DataFrame) -> list[dict]:
     delivery_drones['autonomy'] = delivery_drones['autonomy'].str.strip('Km').astype(int) * 1_000
     delivery_drones['velocity'] = delivery_drones['velocity'].str.strip('m/s').astype(int)
     delivery_drones['initialPos'] = delivery_drones['initialPos'].astype(str)
-
+    
     return delivery_drones.to_dict('records')
 
 def parse_warehouses_and_orders(warehouse_and_orders : pd.DataFrame) -> list[dict]:

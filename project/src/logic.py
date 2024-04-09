@@ -43,16 +43,13 @@ class DeliveryLogic:
         spade.run(self.start_logic())
 
     async def start_logic(self):
-        # basic test
-        for drone in self.delivery_drones:
-            await drone.start()
-            drone.web.start(hostname="localhost", port=10000)
-            break
-
         for warehouse in self.warehouses:
             await warehouse.start()
-            break
         
+        for drone in self.delivery_drones:
+            await drone.start()
+            # drone.web.start(hostname="localhost", port=10000)
+
         drone = self.delivery_drones[0]
         await spade.wait_until_finished(drone)
         await drone.stop()

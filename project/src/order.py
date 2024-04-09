@@ -1,6 +1,10 @@
-
 from typing import Any
 
+STATUS = {
+    "IDLE": 0,
+    "DELIVERING": 1,
+    "DELIVERED": 2
+}
 
 class DeliveryOrder:
     """
@@ -21,7 +25,20 @@ class DeliveryOrder:
             "longitude": dest_long
         }
         
-        self.delivered : bool = False
+        self.order_status : int = STATUS["IDLE"]
+    
+    def get_order_status(self) -> str:
+        return self.order_status
+    
+    # State machine of the order, according to the 3 possible status - idle, delivering and delivered
+    def update_status(self) -> None:
+        if self.order_status == STATUS["DELIVERED"]:
+            print(f"Order {self.id} - Already delivered")
+            return
+        elif self.order_status == STATUS["IDLE"]:
+            self.order_status = STATUS["DELIVERING"]
+        elif self.order_status == STATUS["DELIVERING"]:
+            self.order_status = STATUS["DELIVERED"]
 
     def __str__(self) -> str:
         return "Order {} - from {} to {} with weight {}"\
