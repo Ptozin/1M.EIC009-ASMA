@@ -4,32 +4,6 @@ import spade
 
 class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
-        """
-        The warehouses & orders data should be in the following format:
-        ```
-        [
-            (
-                { // warehouse data
-                    "id": str,
-                    "latitude": float,
-                    "longitude": float,
-                    "weight": int,
-                },
-                [ // orders data
-                    {
-                        "id": str,
-                        "latitude": float,
-                        "longitude": float,
-                        "weight": int,
-                    },
-                    ...
-                ]
-            ),
-            ...
-        ]
-        ```
-        """
-
         self.delivery_drones = [
             drone_agent.DroneAgent(
                 drone["id"],
@@ -49,9 +23,7 @@ class DeliveryLogic:
             ) for warehouse, orders in warehouses
         ]
 
-        """
-        Now we can start the agents and pray they work as expected.
-        """
+        # Start the agents and pray they work as expected.
         spade.run(self.start_logic())
 
     async def start_logic(self):
