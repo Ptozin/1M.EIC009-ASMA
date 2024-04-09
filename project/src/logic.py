@@ -1,26 +1,31 @@
-import warehouse_agent
-import drone_agent
+from warehouse_agent import WarehouseAgent
+from drone_agent import DroneAgent
 import spade
 
 class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
-        self.delivery_drones = [
-            drone_agent.DroneAgent(
-                drone["id"],
-                drone["capacity"],
-                drone["autonomy"],
-                drone["velocity"],
-                drone["initialPos"]
-            ) for drone in delivery_drones
-        ]
-
+        
         self.warehouses = [
-            warehouse_agent.WarehouseAgent(
+            WarehouseAgent(
                 warehouse["id"],
+                warehouse["jid"],
+                warehouse["password"],
                 warehouse["latitude"],
                 warehouse["longitude"],
                 orders
             ) for warehouse, orders in warehouses
+        ]
+        
+        self.delivery_drones = [
+            DroneAgent(
+                drone["id"],
+                drone["jid"],
+                drone["password"],
+                drone["initialPos"],
+                drone["capacity"],
+                drone["autonomy"],
+                drone["velocity"]
+            ) for drone in delivery_drones
         ]
 
         # Start the agents and pray they work as expected.

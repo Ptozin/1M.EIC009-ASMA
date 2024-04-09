@@ -11,9 +11,9 @@ class InformBehav(OneShotBehaviour):
         await self.agent.stop()
 
 class WarehouseAgent(Agent):
-    def __init__(self, jid, latitude, longitude, orders):
-        self.password = 'admin' # TODO: receive main unique password
-        super().__init__(jid, self.password)
+    def __init__(self, id, jid, password, latitude, longitude, orders):
+        super().__init__(jid, password)
+        self.id = id
         self.latitude = latitude
         self.longitude = longitude
         self.inventory = {}
@@ -30,6 +30,6 @@ class WarehouseAgent(Agent):
             create_order(order)
 
     async def setup(self):
-        print(f"[SETUP] {self.jid}")
+        print(f"[SETUP] {self.id}")
         b = InformBehav()
         self.add_behaviour(b)

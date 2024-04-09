@@ -1,17 +1,20 @@
 import json, pandas as pd
 from misc.create_user import ProsodyClient
 
-DATA_FOLDER = 'data/'
+DATA_FOLDER : str = 'data/'
+PROSODY_PASSWORD : str = ''
 
 def create_agents(agents_uids : list[str]):
     """
     Creates users in prosody server if they don't exist already.
     WARNING: Only call it the first time you run the program.
     """
+    global PROSODY_PASSWORD
     with open(DATA_FOLDER +'global_variables.json') as file:
         content : json = json.load(file)
         container_id : str = content['docker_container_id']
         prosody_password : str = content['prosody_password']
+        PROSODY_PASSWORD = prosody_password
 
     with ProsodyClient(container_id) as prosody_client:
         for agent_uid in agents_uids:
@@ -28,8 +31,9 @@ def parse_delivery_drones(delivery_drones : pd.DataFrame) -> list[dict]:
         list[dict]: A list of dictionaries representing the parsed delivery drones data.
     """
 
-    delivery_drones['id'] = delivery_drones['id'].astype(str) + '@localhost'
-    delivery_drones['password'] = delivery_drones['id'].astype(str)
+    delivery_drones['id'] = delivery_drones['id'].astype(str)
+    delivery_drones['jid'] = delivery_drones['id'] + '@localhost'
+    delivery_drones['password'] = PROSODY_PASSWORD
     delivery_drones['capacity'] = delivery_drones['capacity'].str.strip('kg').astype(int)
     delivery_drones['autonomy'] = delivery_drones['autonomy'].str.strip('Km').astype(int) * 1_000
     delivery_drones['velocity'] = delivery_drones['velocity'].str.strip('m/s').astype(int)
@@ -37,7 +41,7 @@ def parse_delivery_drones(delivery_drones : pd.DataFrame) -> list[dict]:
 
     return delivery_drones.to_dict('records')
 
-def parse_warehouses_and_orders(warehouses : pd.DataFrame) -> list[dict]:
+def parse_warehouses_and_orders(warehouse_and_orders : pd.DataFrame) -> list[dict]:
     """ 
     Parse the warehouses and orders data.
     
@@ -49,13 +53,19 @@ def parse_warehouses_and_orders(warehouses : pd.DataFrame) -> list[dict]:
     """
 
     # Set the first line (warehouse) id to be the prosody id
-    warehouses.loc[0, 'id'] = warehouses.loc[0, 'id'] + '@localhost'
-    warehouses['id'] = warehouses['id'].astype(str)
-
-    warehouses['latitude'] = warehouses['latitude'].str.replace(',', '.').astype(float)
-    warehouses['longitude'] = warehouses['longitude'].str.replace(',', '.').astype(float)
-
-    return warehouses.head(1).to_dict('records')[0], warehouses.iloc[1: , :].to_dict('records')
+    warehouse_and_orders['id'] = warehouse_and_orders['id'].astype(str)
+    warehouse_and_orders['latitude'] = warehouse_and_orders['latitude'].str.replace(',', '.').astype(float)
+    warehouse_and_orders['longitude'] = warehouse_and_orders['longitude'].str.replace(',', '.').astype(float)
+    
+    warehouse = warehouse_and_orders.iloc[0:1, :]
+    orders = warehouse_and_orders.iloc[1: , :]
+    
+    warehouse = warehouse.to_dict('records')[0]
+    
+    warehouse['jid'] = warehouse['id'] + '@localhost'
+    warehouse['password'] = PROSODY_PASSWORD
+    
+    return warehouse, orders.to_dict('records')
 
 def parse_data() -> tuple[list[dict], list[list]]:    
     # Read delivery drones agents

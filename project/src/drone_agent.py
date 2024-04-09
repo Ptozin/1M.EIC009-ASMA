@@ -33,11 +33,21 @@ class Delivering(State):
 class Returning(State):
     async def run(self):
         print("[STATE] Returning")
+        
+class DroneParameters:
+    def __init__(self, capacity, autonomy, velocity, latitude, longitude):
+        self.capacity = capacity
+        self.autonomy = autonomy
+        self.velocity = velocity
+        self.position = {
+            "latitude": latitude,
+            "longitude": longitude
+        } 
 
 class DroneAgent(Agent):
-    def __init__(self, jid, capacity = 0, autonomy = 0, velocity = 0, initialPos = None):
-        self.password = 'admin' # TODO: receive main unique password
-        super().__init__(jid, self.password)
+    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0):
+        super().__init__(jid, password)
+        self.id = id
         self.capacity = capacity
         self.autonomy = autonomy
         self.velocity = velocity
