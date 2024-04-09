@@ -11,7 +11,7 @@ class InformBehav(OneShotBehaviour):
         await self.agent.stop()
 
 class WarehouseAgent(Agent):
-    def __init__(self, id, jid, password, latitude, longitude, orders):
+    def __init__(self, id, jid, password, latitude, longitude, orders) -> None:
         super().__init__(jid, password)
         self.id = id
         self.latitude = latitude
