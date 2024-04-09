@@ -45,34 +45,33 @@ class DroneParameters:
         } 
 
 class DroneAgent(Agent):
-    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0):
+    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}):
         super().__init__(jid, password)
         self.id = id
-        self.capacity = capacity
-        self.autonomy = autonomy
-        self.velocity = velocity
-        self.initialPos = initialPos
+        
+        self.parameters = DroneParameters(
+            capacity, 
+            autonomy, 
+            velocity, 
+            warehouse_positions[initialPos]["latitude"], 
+            warehouse_positions[initialPos]["longitude"]
+        )
 
         self.curr_weight = 0
         self.curr_autonomy = autonomy
         self.tracking_orders = []
         
-        # TODO: get coords (not hardcoded)
-        self.warehouse_data = {
-            "center1": (18.994237, 72.825553),
-            "center2": (18.927584, 72.832585)
-        }
-        self.curr_coords = self.warehouse_data[self.initialPos]
+        self.warehouse_positions = warehouse_positions
 
     def closest_warehouse(self):
         min_dist = float('inf')
         closest = None
-        for warehouse in self.warehouse_data:
+        for warehouse in self.warehouse_positions:
             dist = haversine_distance(
                 self.curr_coords[0],
                 self.curr_coords[1],
-                self.warehouse_data[warehouse][0],
-                self.warehouse_data[warehouse][1]
+                self.warehouse_positions[warehouse][0],
+                self.warehouse_positions[warehouse][1]
             )
             if dist < min_dist:
                 min_dist = dist

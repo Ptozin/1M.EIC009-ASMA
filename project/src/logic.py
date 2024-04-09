@@ -5,6 +5,7 @@ import spade
 class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
         
+        # Create warehouse agents
         self.warehouses = [
             WarehouseAgent(
                 warehouse["id"],
@@ -16,6 +17,15 @@ class DeliveryLogic:
             ) for warehouse, orders in warehouses
         ]
         
+        # Store warehouse positions for drone navigation
+        warehouse_positions = {}
+        for warehouse, _ in warehouses:
+            warehouse_positions[warehouse["id"]] = {
+                "latitude": warehouse["latitude"],
+                "longitude": warehouse["longitude"]
+            }
+                
+        # Create drone agents
         self.delivery_drones = [
             DroneAgent(
                 drone["id"],
@@ -24,7 +34,8 @@ class DeliveryLogic:
                 drone["initialPos"],
                 drone["capacity"],
                 drone["autonomy"],
-                drone["velocity"]
+                drone["velocity"],
+                warehouse_positions
             ) for drone in delivery_drones
         ]
 
