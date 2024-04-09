@@ -16,12 +16,16 @@ class WarehouseAgent(Agent):
         self.id = id
         self.latitude = latitude
         self.longitude = longitude
+        self.position = {
+            "latitude": latitude,
+            "longitude": longitude
+        } 
         self.inventory = {}
         def create_order(order):
             self.inventory[order["id"]] = DeliveryOrder(
                 order["id"],
-                self.latitude,
-                self.longitude,
+                self.position["latitude"],
+                self.position["longitude"],
                 order["latitude"],
                 order["longitude"],
                 order["weight"]

@@ -34,34 +34,24 @@ class Returning(State):
     async def run(self):
         print("[STATE] Returning")
         
-class DroneParameters:
-    def __init__(self, capacity, autonomy, velocity, latitude, longitude):
-        self.capacity = capacity
-        self.autonomy = autonomy
-        self.velocity = velocity
-        self.position = {
-            "latitude": latitude,
-            "longitude": longitude
-        } 
-
 class DroneAgent(Agent):
     def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}):
         super().__init__(jid, password)
         self.id = id
+        self.max_capacity : float = capacity # in kg
+        self.max_autonomy : float = autonomy # in meters
+        self.velocity : float = velocity # in m/s
         
-        self.parameters = DroneParameters(
-            capacity, 
-            autonomy, 
-            velocity, 
-            warehouse_positions[initialPos]["latitude"], 
-            warehouse_positions[initialPos]["longitude"]
-        )
-
-        self.curr_weight = 0
-        self.curr_autonomy = autonomy
-        self.tracking_orders = []
+        self.curr_capacity : float = 0.0
+        self.curr_autonomy : float = autonomy
         
         self.warehouse_positions = warehouse_positions
+        self.position = {
+            "latitude": warehouse_positions[initialPos]["latitude"],
+            "longitude": warehouse_positions[initialPos]["longitude"]
+        } 
+        
+        self.tracking_orders = []
 
     def closest_warehouse(self):
         min_dist = float('inf')
