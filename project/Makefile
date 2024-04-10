@@ -15,6 +15,8 @@ else
     SCRIPTS = bin
 endif
 
+ARGS = original
+
 # Main target
 all: install
 
@@ -29,7 +31,7 @@ install: venv
 	uv $(PIP) install -e src$(SEP)misc$(SEP)
 
 run:
-	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py -d $(ARGS)
 
 visualization:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization.py

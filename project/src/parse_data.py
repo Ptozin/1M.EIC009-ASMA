@@ -67,13 +67,19 @@ def parse_warehouses_and_orders(warehouse_and_orders : pd.DataFrame) -> list[dic
     
     return warehouse, orders.to_dict('records')
 
-def parse_data() -> tuple[list[dict], list[list]]:    
+def parse_data(isOriginalData : bool = True) -> tuple[list[dict], list[list]]:    
+
+    if isOriginalData:
+        folder = DATA_FOLDER + 'original/'
+    else:
+        folder = DATA_FOLDER + 'small/'
+    
     # Read delivery drones agents
-    delivery_drones_fields : pd.DataFrame = pd.read_csv(DATA_FOLDER + 'delivery_drones.csv', delimiter=';')
+    delivery_drones_fields : pd.DataFrame = pd.read_csv(folder + 'delivery_drones.csv', delimiter=';')
 
     # Read warehouse agents
-    warehouse_1_fields : pd.DataFrame = pd.read_csv(DATA_FOLDER + 'delivery_center1.csv', delimiter=';')
-    warehouse_2_fields : pd.DataFrame = pd.read_csv(DATA_FOLDER + 'delivery_center2.csv', delimiter=';')
+    warehouse_1_fields : pd.DataFrame = pd.read_csv(folder + 'delivery_center1.csv', delimiter=';')
+    warehouse_2_fields : pd.DataFrame = pd.read_csv(folder + 'delivery_center2.csv', delimiter=';')
     
     # Retrieve agents uids for prosody
     agents_uids : list[str] = delivery_drones_fields['id'].to_list() \

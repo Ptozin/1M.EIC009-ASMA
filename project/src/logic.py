@@ -22,7 +22,8 @@ class DeliveryLogic:
         for warehouse, _ in warehouses:
             warehouse_positions[warehouse["id"]] = {
                 "latitude": warehouse["latitude"],
-                "longitude": warehouse["longitude"]
+                "longitude": warehouse["longitude"],
+                "jid": warehouse["jid"]
             }
                 
         # Create drone agents
