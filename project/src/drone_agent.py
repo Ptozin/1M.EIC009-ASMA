@@ -6,14 +6,17 @@ from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
 from misc.distance import haversine_distance, next_position
+from order import DeliveryOrder
 
 # ----------------------------------------------------------------------------------------------
 
 STATE_IDLE = 0
 STATE_DELIVERING = 10
 STATE_DISMISSED = 20
+STATE_ERROR = 30
+STATE_RETURNED = 40
 
-TIME_MULTIPLIER = 50 # increases the speed to 1km/s
+TIME_MULTIPLIER = 500 # increases the speed to 10km/s
 
 # ----------------------------------------------------------------------------------------------
 
@@ -22,24 +25,24 @@ class IdleBehav(CyclicBehaviour):
         target = self.agent.closest_warehouse()
         msg = Message(to=target)
         msg.set_metadata("performative", "inform")
-        msg.body = json.dumps({
-            "id": self.agent.id,
-            "capacity": self.agent.max_capacity,
-            "autonomy": self.agent.max_autonomy,
-            "velocity": self.agent.velocity
-        })
+        msg.body = self.agent.__repr__()
         await self.send(msg)
         msg = await self.receive(timeout=5)
         if msg is None:
             print(f"[{self.agent.id}] Waiting for tasks...")
-        else:
-            print(f"{self.agent.id} - [MESSAGE] {msg.body}")
-            self.agent.curr_orders = json.loads(msg.body) # TODO: later check if it even wants to accept the task
-            if self.agent.curr_orders:
+        else:            
+            if msg.metadata["performative"] == "inform":
+                orders = json.loads(msg.body) # TODO: later check if it even wants to accept the task
+                for order in orders:
+                    order = json.loads(order)
+                    self.agent.curr_orders.append(DeliveryOrder(**order))
+                
                 self.kill(exit_code=STATE_DELIVERING)
-            else:
+                
+            elif msg.metadata["performative"] == "refuse":
                 # remove warehouse from available list, since it has no orders
-                self.agent.update_warehouses_available(target.split("@")[0])
+                print(f"{self.agent.id} - [REFUSED] {msg.sender}")
+                self.agent.remove_warehouse(target.split("@")[0])
                 
                 # if no more warehouses available, dismiss agent
                 if not self.agent.available_warehouses():
@@ -63,18 +66,18 @@ class DelivBehav(PeriodicBehaviour):
             self.agent.position = next_position(
                     self.agent.position['latitude'],
                     self.agent.position['longitude'],
-                    self.agent.curr_order['latitude'],
-                    self.agent.curr_order['longitude'],
+                    self.agent.curr_order.destination_position['latitude'],
+                    self.agent.curr_order.destination_position['longitude'],
                     self.agent.velocity * TIME_MULTIPLIER
                 )
             
-            print(f"{self.agent.id} - [DELIVERING] {len(self.agent.curr_orders)} orders - {haversine_distance(self.agent.position['latitude'], self.agent.position['longitude'], self.agent.curr_order['latitude'], self.agent.curr_order['longitude'])} meters to target")
+            print(f"{self.agent.id} - [DELIVERING] {len(self.agent.curr_orders)} orders - {haversine_distance(self.agent.position['latitude'], self.agent.position['longitude'], self.agent.curr_order.destination_position['latitude'], self.agent.curr_order.destination_position['longitude'])} meters to target")
             
-            if self.agent.arrived_to_target(self.agent.curr_order['latitude'], self.agent.curr_order['longitude']):
+            if self.agent.arrived_to_target(self.agent.curr_order.destination_position['latitude'], self.agent.curr_order.destination_position['longitude']):
                 # TODO: add autonomy consumption and fix capacity
-                self.agent.curr_capacity += self.agent.curr_order['weight']
-                self.agent.position['latitude'] = self.agent.curr_order['latitude']
-                self.agent.position['longitude'] = self.agent.curr_order['longitude']
+                self.agent.curr_capacity += self.agent.curr_order.weight
+                self.agent.position['latitude'] = self.agent.curr_order.destination_position['latitude']
+                self.agent.position['longitude'] = self.agent.curr_order.destination_position['longitude']
                 self.agent.curr_orders.remove(self.agent.curr_order)
                 self.agent.curr_order = None
     
@@ -85,9 +88,13 @@ class DelivBehav(PeriodicBehaviour):
 
 class ReturnBehav(PeriodicBehaviour):
     async def run(self):
+        if not self.agent.available_warehouses():
+            self.kill(exit_code=STATE_ERROR)
+            return 
+        
         if self.agent.curr_warehouse is None:
             self.agent.curr_warehouse = self.agent.closest_warehouse(retrieve_JID=False)
-        
+                
         self.agent.position = next_position(
                 self.agent.position['latitude'],
                 self.agent.position['longitude'],
@@ -96,17 +103,23 @@ class ReturnBehav(PeriodicBehaviour):
                 self.agent.velocity * TIME_MULTIPLIER
             )
         
-        print(f"{self.agent.id} - [RETURNING] {haversine_distance(self.agent.position['latitude'], self.agent.position['longitude'], self.agent.warehouse_positions[self.agent.curr_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.curr_warehouse]['longitude'],)} meters to {self.agent.curr_warehouse}")
-
         if self.agent.arrived_to_target(self.agent.warehouse_positions[self.agent.curr_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.curr_warehouse]['longitude']):     
             self.agent.curr_warehouse = None
-            self.kill()
+            self.kill(exit_code=STATE_RETURNED)
         else:
             # show prints of the distance to the warehouse
             print(f"{self.agent.id} - [RETURNING] - Distance to warehouse: {haversine_distance(self.agent.position['latitude'], self.agent.position['longitude'], self.agent.warehouse_positions[self.agent.curr_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.curr_warehouse]['longitude'])} meters")
     
     async def on_end(self):
-        self.agent.add_behaviour(IdleBehav())
+        if self.exit_code == STATE_ERROR:
+            print (f"{self.agent.id} - [ERROR] - No warehouse available to return to.")
+            await self.agent.stop()
+        elif self.exit_code == STATE_RETURNED:
+            print(f"{self.agent.id} - [RETURNED]")
+            self.agent.add_behaviour(IdleBehav())
+        else:
+            print(f"{self.agent.id} - [ERROR] - Unexpected error")
+            await self.agent.stop()
         
 # ----------------------------------------------------------------------------------------------
         
@@ -120,11 +133,13 @@ class DroneAgent(Agent):
         
         self.curr_capacity : float = 0.0
         self.curr_autonomy : float = autonomy
-        self.curr_orders : list = []
+        self.curr_orders : list[DeliveryOrder] = []
         self.curr_order = None
+        
+        self.orders : list = []
 
         self.warehouse_positions : dict = warehouse_positions    
-        self.curr_warehouse = None
+        self.curr_warehouse : dict = None
         self.distance_to_curr_warehouse = 0.0
     
         self.position = {
@@ -162,14 +177,14 @@ class DroneAgent(Agent):
         """
         return len(self.warehouse_positions) > 0
     
-    def update_warehouses_available(self, warehouse_id) -> None:
+    def remove_warehouse(self, warehouse_id : str) -> None:
         """
         Method to remove a warehouse from the available list.
 
         Args:
             warehouse_id (str): The id of the warehouse to remove.
         """
-        self.warehouse_positions.pop(warehouse_id, None)
+        self.warehouse_positions.pop(warehouse_id)
     
     def closest_order(self):
         min_dist = float('inf')
@@ -178,8 +193,8 @@ class DroneAgent(Agent):
             dist = haversine_distance(
                 self.position['latitude'],
                 self.position['longitude'],
-                order['latitude'],
-                order['longitude']
+                order.destination_position['latitude'],
+                order.destination_position['longitude']
             )
             if dist < min_dist:
                 min_dist = dist
@@ -198,6 +213,14 @@ class DroneAgent(Agent):
         return "{} - Drone with capacity {} and autonomy {}"\
             .format(str(self.id), self.max_capacity, self.max_capacity, 
                     self.velocity, self.warehouse_positions)
+            
+    def __repr__(self) -> str:
+        return json.dumps({
+            "id": self.id,
+            "capacity": self.max_capacity,
+            "autonomy": self.max_autonomy,
+            "velocity": self.velocity,
+        })
             
 # ----------------------------------------------------------------------------------------------
     

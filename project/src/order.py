@@ -1,4 +1,5 @@
 from typing import Any
+import json
 
 STATUS = {
     "IDLE": 0,
@@ -46,7 +47,29 @@ class DeliveryOrder:
                               self.start_position['longitude']), 
                             (self.destination_position['latitude'], 
                             self.destination_position['longitude']), 
-                    self.weight)
+                    self.weight)        
             
     def __repr__(self) -> str:
-        return self.__str__()
+        return json.dumps({
+            "id": self.id,
+            "origin_lat": self.start_position['latitude'],
+            "origin_long": self.start_position['longitude'],
+            "dest_lat": self.destination_position['latitude'],
+            "dest_long": self.destination_position['longitude'],
+            "weight": self.weight
+        })
+        
+    def __gt__(self, weight : float) -> bool:
+        return self.weight > weight
+    
+    def __lt__(self, weight : float) -> bool:
+        return self.weight < weight
+    
+    def __eq__(self, weight : float) -> bool:
+        return self.weight == weight
+    
+    def __le__(self, weight : float) -> bool:
+        return self.weight <= weight
+    
+    def __ge__(self, weight : float) -> bool:
+        return self.weight >= weight

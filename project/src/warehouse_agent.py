@@ -1,3 +1,5 @@
+# ----------------------------------------------------------------------------------------------
+
 from order import DeliveryOrder
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
@@ -5,44 +7,94 @@ from spade.message import Message
 from spade.template import Template
 import json
 
+# ----------------------------------------------------------------------------------------------
+
+STATE_DISMISSED = 20
+
+# ----------------------------------------------------------------------------------------------
+
 class WarehouseAgent(Agent):
+        
     class HandOutBehav(CyclicBehaviour):
+        def handle_orders(self, drone_capacity : float) -> str:
+            """
+            Handle orders to be delivered by the drone.
+
+            Args:
+                drone_capacity (float): The drone capacity.
+
+            Returns:
+                str: A JSON string containing the orders to be delivered.
+            """
+            
+            orders_to_remove = []
+            orders_to_deliver = []
+            
+            for order_id, order in list(self.agent.inventory.items()):
+                if order.weight <= drone_capacity:                    
+                    orders_to_remove.append(order_id)
+                    orders_to_deliver.append(order.__repr__())
+                    drone_capacity -= order.weight
+                    if drone_capacity == 0: break
+            
+            # For now, we will remove all delivered orders instead of checking drone confirmation
+            for order_id in orders_to_remove:
+                del self.agent.inventory[order_id]
+                
+            self.agent.inventory_size = len(self.agent.inventory)
+            
+            return json.dumps(orders_to_deliver)
+            
         async def run(self):
             recv_msg = await self.receive(timeout=5)
             if recv_msg is None:
-                print(f"{self.agent.id} - Waiting for available drones...")
+                print(f"{self.agent.id} - Waiting for available drones... - Inventory: ({self.agent.inventory_size}/{self.agent.initial_inventory_size})")
             else:
                 print(f"{self.agent.id} - [MESSAGE] {recv_msg.body}")
-
                 drone_data = json.loads(recv_msg.body) 
-                capacity = drone_data['capacity']
-                orders = []
-                orders_to_remove = [] 
-
-                for order_id, order in list(self.agent.inventory.items()):
-                    if order.weight <= capacity:
-                        orders.append({
-                            "id": order.id,
-                            "latitude": order.destination_position["latitude"],
-                            "longitude": order.destination_position["longitude"],
-                            "weight": order.weight
-                        })
-                        capacity -= order.weight
-                        orders_to_remove.append(order_id) 
 
                 # Send orders to drone
                 msg = Message(to=str(recv_msg.sender)) 
                 msg.set_metadata("performative", "inform")
-                msg.body = json.dumps(orders)       
+                msg.body = self.handle_orders(drone_data['capacity'])
+                                
                 await self.send(msg)
-
-                # later check drone confirmation before removing orders
-                for order_id in orders_to_remove:
-                    del self.agent.inventory[order_id]
                 
-                print(f"{self.agent.id} - Inventory: ({len(self.agent.inventory)}/{self.agent.inventory_size})")
+                print(f"{self.agent.id} - Inventory: ({len(self.agent.inventory)}/{self.agent.initial_inventory_size})")
+                
+                if len(self.agent.inventory) == 0:
+                    self.kill(exit_code=STATE_DISMISSED)
                     
         async def on_end(self):
+            if self.exit_code == STATE_DISMISSED:
+                self.agent.add_behaviour(self.agent.RefuseOrderBehav())
+            else:
+                # print(f"{self.agent.id} - [RESTART]")
+                # self.agent.add_behaviour(self)
+                
+                await self.agent.stop()
+                
+    class RefuseOrderBehav(CyclicBehaviour):
+        async def on_start(self) -> None:
+            self.counter = 0
+            self.limit = 5
+        
+        async def run(self):
+            self.counter += 1
+            recv_msg = await self.receive(timeout=5)
+            if recv_msg is None:
+                print(f"{self.agent.id} - [REFUSING] - Waiting for available drones...")
+                if self.counter == self.limit:
+                    self.kill()
+            else:
+                self.counter = 0 
+                print(f"{self.agent.id} - [REFUSING] - [MESSAGE] {recv_msg.body}")
+                msg = Message(to=str(recv_msg.sender))
+                msg.set_metadata("performative", "refuse")
+                await self.send(msg)
+        
+        async def on_end(self):
+            print(f"{self.agent.id} - [DISMISSING] No more orders to deliver & drones to attend to.")
             await self.agent.stop()
     
     def __init__(self, id, jid, password, latitude, longitude, orders) -> None:
@@ -67,9 +119,12 @@ class WarehouseAgent(Agent):
         for order in orders:
             create_order(order)
         
+        self.initial_inventory_size = len(self.inventory)
         self.inventory_size = len(self.inventory)
 
     async def setup(self):
         print(f"{self.id} - [SETUP]")
         b = self.HandOutBehav()
         self.add_behaviour(b)
+
+# ----------------------------------------------------------------------------------------------
