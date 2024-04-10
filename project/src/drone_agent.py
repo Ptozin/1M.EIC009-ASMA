@@ -35,20 +35,22 @@ class IdleBehav(CyclicBehaviour):
 
 class DelivBehav(PeriodicBehaviour):
     async def run(self):
-        if self.agent.curr_order is None:
-            self.agent.curr_order = self.agent.closest_order()
-            self.agent.distance_to_curr_order = haversine_distance(
-                self.agent.position['latitude'],
-                self.agent.position['longitude'],
-                self.agent.curr_order['latitude'],
-                self.agent.curr_order['longitude']
-            )
-            
+        print(f"{self.agent.id} - [DELIVERING] {len(self.agent.curr_orders)} orders")
         if len(self.agent.curr_orders) == 0:
             self.kill()
+            # TODO: add returning behaviour
         else:
-            print(f"{self.agent.id} - [DELIVERING] {self.agent.distance_to_curr_order}km to {self.agent.curr_order['id']}")
-            self.agent.distance_to_curr_order -= self.agent.velocity * 0.001 # maybe hardcode 1km per second for testing purposes
+            if self.agent.curr_order is None:
+                self.agent.curr_order = self.agent.closest_order()
+                self.agent.distance_to_curr_order = haversine_distance(
+                    self.agent.position['latitude'],
+                    self.agent.position['longitude'],
+                    self.agent.curr_order['latitude'],
+                    self.agent.curr_order['longitude']
+                )
+
+            #print(f"{self.agent.id} - [DELIVERING] {self.agent.distance_to_curr_order}km to {self.agent.curr_order['id']}")
+            self.agent.distance_to_curr_order -= 1 # self.agent.velocity * 0.001 # hardcoded 1km per second for testing purposes
             if self.agent.distance_to_curr_order <= 0:
                 self.agent.curr_capacity += self.agent.curr_order['weight']
                 self.agent.curr_autonomy -= self.agent.distance_to_curr_order # TODO: add autonomy consumption
