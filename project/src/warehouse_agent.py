@@ -8,14 +8,13 @@ import json
 class WarehouseAgent(Agent):
     class HandOutBehav(CyclicBehaviour):
         async def run(self):
-            msg = await self.receive(timeout=5)
-            if msg is None:
+            recv_msg = await self.receive(timeout=5)
+            if recv_msg is None:
                 print(f"{self.agent.id} - Waiting for available drones...")
             else:
-                print(f"\n{self.agent.id} - [MESSAGE] {msg.body}\n")
+                print(f"{self.agent.id} - [MESSAGE] {recv_msg.body}")
 
-                drone_data = json.loads(msg.body) 
-                drone = drone_data['id']
+                drone_data = json.loads(recv_msg.body) 
                 capacity = drone_data['capacity']
                 orders = []
                 orders_to_remove = [] 
@@ -31,8 +30,8 @@ class WarehouseAgent(Agent):
                         capacity -= order.weight
                         orders_to_remove.append(order_id) 
 
-                target = drone + '@localhost'
-                msg = Message(to=target) 
+                # Send orders to drone
+                msg = Message(to=str(recv_msg.sender)) 
                 msg.set_metadata("performative", "inform")
                 msg.body = json.dumps(orders)       
                 await self.send(msg)
@@ -40,6 +39,8 @@ class WarehouseAgent(Agent):
                 # later check drone confirmation before removing orders
                 for order_id in orders_to_remove:
                     del self.agent.inventory[order_id]
+                
+                print(f"{self.agent.id} - Inventory: ({len(self.agent.inventory)}/{self.agent.inventory_size})")
                     
         async def on_end(self):
             await self.agent.stop()
@@ -65,6 +66,8 @@ class WarehouseAgent(Agent):
             )
         for order in orders:
             create_order(order)
+        
+        self.inventory_size = len(self.inventory)
 
     async def setup(self):
         print(f"{self.id} - [SETUP]")

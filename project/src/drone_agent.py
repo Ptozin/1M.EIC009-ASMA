@@ -9,6 +9,12 @@ from misc.distance import haversine_distance
 
 # ----------------------------------------------------------------------------------------------
 
+STATE_IDLE = 0
+STATE_DELIVERING = 10
+STATE_DISMISSED = 20
+
+# ----------------------------------------------------------------------------------------------
+
 class IdleBehav(CyclicBehaviour):
     async def run(self):
         target = self.agent.closest_warehouse() + "@localhost"
@@ -27,10 +33,22 @@ class IdleBehav(CyclicBehaviour):
         else:
             print(f"\n{self.agent.id} - [MESSAGE] {msg.body}\n")
             self.agent.curr_orders = json.loads(msg.body) # TODO: later check if it even wants to accept the task
-            self.kill()
+            if self.agent.curr_orders:
+                self.kill(exit_code=STATE_DELIVERING)
+            else:
+                pass
+                # remove warehouse from available list, since it has no orders
+                #self.agent.update_warehouses_available(target.split("@")[0])
+                
+                # if no more warehouses available, dismiss agent
+                #if !self.agent.available_warehouses():
+                #    self.kill(exit_code=STATE_DISMISSED)
             
     async def on_end(self):
-        self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
+        #if self.exit_code == STATE_DELIVERING:
+            self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
+        #elif self.exit_code == STATE_DISMISSED:
+        #    await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
 
