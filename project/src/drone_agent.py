@@ -28,6 +28,7 @@ class IdleBehav(CyclicBehaviour):
             print(f"\n{self.agent.id} - [MESSAGE] {msg.body}\n")
             self.agent.curr_orders = json.loads(msg.body) # TODO: later check if it even wants to accept the task
             self.kill()
+            
     async def on_end(self):
         self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
             
@@ -38,7 +39,6 @@ class DelivBehav(PeriodicBehaviour):
         print(f"{self.agent.id} - [DELIVERING] {len(self.agent.curr_orders)} orders")
         if len(self.agent.curr_orders) == 0:
             self.kill()
-            # TODO: add returning behaviour
         else:
             if self.agent.curr_order is None:
                 self.agent.curr_order = self.agent.closest_order()
@@ -59,12 +59,32 @@ class DelivBehav(PeriodicBehaviour):
                 self.agent.curr_orders.remove(self.agent.curr_order)
                 self.agent.curr_order = None
                 self.agent.distance_to_curr_order = 0.0
+    
+    async def on_end(self):
+        self.agent.add_behaviour(ReturnBehav(period=1.0, start_at=datetime.datetime.now()))
                 
 # ----------------------------------------------------------------------------------------------
 
-class Returning(PeriodicBehaviour):
+class ReturnBehav(PeriodicBehaviour):
     async def run(self):
-        print("[STATE] Returning")
+        if self.agent.curr_warehouse is None:
+            self.agent.curr_warehouse = self.agent.closest_warehouse()
+            self.agent.distance_to_curr_warehouse = haversine_distance(
+                self.agent.position['latitude'],
+                self.agent.position['longitude'],
+                self.agent.warehouse_positions[self.agent.curr_warehouse]['latitude'],
+                self.agent.warehouse_positions[self.agent.curr_warehouse]['longitude']
+            )
+
+        print(f"{self.agent.id} - [RETURNING] to {self.agent.curr_warehouse}")            
+        self.agent.distance_to_curr_warehouse -= 1 # self.agent.velocity * 0.001 # hardcoded 1km per second for testing purposes
+        if self.agent.distance_to_curr_warehouse <= 0:
+            self.agent.curr_warehouse = None
+            self.agent.distance_to_curr_warehouse = 0.0
+            self.kill()
+    
+    async def on_end(self):
+        self.agent.add_behaviour(IdleBehav())
         
 # ----------------------------------------------------------------------------------------------
         
@@ -81,8 +101,11 @@ class DroneAgent(Agent):
         self.curr_orders = []
         self.curr_order = None
         self.distance_to_curr_order = 0.0
-        
-        self.warehouse_positions = warehouse_positions
+    
+        self.warehouse_positions = warehouse_positions    
+        self.curr_warehouse = None
+        self.distance_to_curr_warehouse = 0.0
+    
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
             "longitude": warehouse_positions[initialPos]["longitude"]
