@@ -13,7 +13,18 @@ class DeliveryOrder:
     In a future implementation, in a given time interval, each delivery current position will be updated
     to be displayed in a map.
     """
-    def __init__(self, id, origin_lat, origin_long, dest_lat, dest_long, weight) -> None:
+    def __init__(self, id : str, origin_lat : float, origin_long : float, dest_lat : float, dest_long : float, weight : int) -> None:
+        """
+        DeliveryOrder class to represent a delivery order.
+        
+        Args:
+            id (str): The order id.
+            origin_lat (float): The latitude of the origin position.
+            origin_long (float): The longitude of the origin position.
+            dest_lat (float): The latitude of the destination position.
+            dest_long (float): The longitude of the destination position.
+            weight (int): The weight of the order.
+        """
         self.id : str = id
         self.weight : int = weight
         
@@ -28,18 +39,18 @@ class DeliveryOrder:
         
         self.order_status : int = STATUS["IDLE"]
     
-    def get_order_status(self) -> str:
-        return self.order_status
+    #def get_order_status(self) -> str:
+    #    return self.order_status
     
     # State machine of the order, according to the 3 possible status - idle, delivering and delivered
-    def update_status(self) -> None:
-        if self.order_status == STATUS["DELIVERED"]:
-            print(f"Order {self.id} - Already delivered")
-            return
-        elif self.order_status == STATUS["IDLE"]:
-            self.order_status = STATUS["DELIVERING"]
-        elif self.order_status == STATUS["DELIVERING"]:
-            self.order_status = STATUS["DELIVERED"]
+    #def update_status(self) -> None:
+    #    if self.order_status == STATUS["DELIVERED"]:
+    #        print(f"Order {self.id} - Already delivered")
+    #        return
+    #    elif self.order_status == STATUS["IDLE"]:
+    #        self.order_status = STATUS["DELIVERING"]
+    #    elif self.order_status == STATUS["DELIVERING"]:
+    #        self.order_status = STATUS["DELIVERED"]
 
     def __str__(self) -> str:
         return "Order {} - from {} to {} with weight {}"\

@@ -136,8 +136,6 @@ class DroneAgent(Agent):
         self.curr_orders : list[DeliveryOrder] = []
         self.curr_order = None
         
-        self.orders : list = []
-
         self.warehouse_positions : dict = warehouse_positions    
         self.curr_warehouse : dict = None
         self.distance_to_curr_warehouse = 0.0

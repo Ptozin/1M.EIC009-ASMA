@@ -71,7 +71,6 @@ class WarehouseAgent(Agent):
             else:
                 # print(f"{self.agent.id} - [RESTART]")
                 # self.agent.add_behaviour(self)
-                
                 await self.agent.stop()
                 
     class RefuseOrderBehav(CyclicBehaviour):
