@@ -1,71 +1,72 @@
+# ----------------------------------------------------------------------------------------------
+
+import json
+import datetime
 from spade.agent import Agent
-from spade.behaviour import FSMBehaviour, State, CyclicBehaviour
+from spade.behaviour import CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
 from misc.distance import haversine_distance
 
-import json
+# ----------------------------------------------------------------------------------------------
 
-# states - maybe to change later
-IDLE = "IDLE" # in warehouse and free
-DELIVERING = "DELIVERING" # in route to deliver
-RETURNING = "RETURNING" # in route to warehouse
-
-class FSMBehav(FSMBehaviour):
-    async def on_start(self):
-        pass
-    async def on_end(self):
-        await self.agent.stop()
-
-class Idle(State):
+class IdleBehav(CyclicBehaviour):
     async def run(self):
-        print("[STATE] Idle")
-        to = self.agent.closest_warehouse() + "@localhost"
-        msg = Message(to=to)
-        msg.body = "I'm ready to deliver!"
+        target = self.agent.closest_warehouse() + "@localhost"
+        msg = Message(to=target)
+        msg.set_metadata("performative", "inform")
+        msg.body = json.dumps({
+            "id": self.agent.id,
+            "capacity": self.agent.max_capacity,
+            "autonomy": self.agent.max_autonomy,
+            "velocity": self.agent.velocity
+        })
         await self.send(msg)
-        # message = await self.receive(timeout=5)
-        # TODO: parse message and start delivering
-        self.set_next_state(DELIVERING)
+        msg = await self.receive(timeout=5)
+        if msg is None:
+            print(f"[{self.agent.id}] Waiting for tasks...")
+        else:
+            print(f"\n{self.agent.id} - [MESSAGE] {msg.body}\n")
+            self.agent.curr_orders = json.loads(msg.body) # TODO: later check if it even wants to accept the task
+            self.kill()
+    async def on_end(self):
+        self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
+            
+# ----------------------------------------------------------------------------------------------
 
-class Delivering(State):
+class DelivBehav(PeriodicBehaviour):
     async def run(self):
-        print("[STATE] Delivering")
-        self.set_next_state(RETURNING)
+        if self.agent.curr_order is None:
+            self.agent.curr_order = self.agent.closest_order()
+            self.agent.distance_to_curr_order = haversine_distance(
+                self.agent.position['latitude'],
+                self.agent.position['longitude'],
+                self.agent.curr_order['latitude'],
+                self.agent.curr_order['longitude']
+            )
+            
+        if len(self.agent.curr_orders) == 0:
+            self.kill()
+        else:
+            print(f"{self.agent.id} - [DELIVERING] {self.agent.distance_to_curr_order}km to {self.agent.curr_order['id']}")
+            self.agent.distance_to_curr_order -= self.agent.velocity * 0.001 # maybe hardcode 1km per second for testing purposes
+            if self.agent.distance_to_curr_order <= 0:
+                self.agent.curr_capacity += self.agent.curr_order['weight']
+                self.agent.curr_autonomy -= self.agent.distance_to_curr_order # TODO: add autonomy consumption
+                self.agent.position['latitude'] = self.agent.curr_order['latitude']
+                self.agent.position['longitude'] = self.agent.curr_order['longitude']
+                self.agent.curr_orders.remove(self.agent.curr_order)
+                self.agent.curr_order = None
+                self.agent.distance_to_curr_order = 0.0
+                
+# ----------------------------------------------------------------------------------------------
 
-class Returning(State):
+class Returning(PeriodicBehaviour):
     async def run(self):
         print("[STATE] Returning")
         
-class DroneAgent(Agent):
-    class MyBehav(CyclicBehaviour):
-        async def on_start(self):
-            pass
-            # print(f"[{self.agent.jid}] MyBehav started")
+# ----------------------------------------------------------------------------------------------
         
-        async def run(self):
-            # print(f"[{self.agent.jid}] MyBehav running")
-            # send message to warehouse - using first warehouse for now
-            to = self.agent.closest_warehouse() + "@localhost"
-            msg = Message(to=to)
-            msg.set_metadata("performative", "inform")
-            msg.body = json.dumps({
-                "id": self.agent.id,
-                "capacity": self.agent.max_capacity,
-                "autonomy": self.agent.max_autonomy,
-                "velocity": self.agent.velocity
-            })
-            
-            await self.send(msg)
-            message = await self.receive(timeout=5)
-            # print(f"[{self.agent.jid}] Received message: {message.body}")
-            self.kill(exit_code=10)
-            
-        async def on_end(self):
-            print(f"[{self.agent.jid}] MyBehav ended")
-            await self.agent.stop()
-    
-
-    
+class DroneAgent(Agent):
     def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}):
         super().__init__(jid, password)
         self.id = id
@@ -75,14 +76,15 @@ class DroneAgent(Agent):
         
         self.curr_capacity : float = 0.0
         self.curr_autonomy : float = autonomy
+        self.curr_orders = []
+        self.curr_order = None
+        self.distance_to_curr_order = 0.0
         
         self.warehouse_positions = warehouse_positions
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
             "longitude": warehouse_positions[initialPos]["longitude"]
         } 
-        
-        self.tracking_orders = []
 
     def closest_warehouse(self):
         min_dist = float('inf')
@@ -97,24 +99,31 @@ class DroneAgent(Agent):
             if dist < min_dist:
                 min_dist = dist
                 closest = warehouse
-        print(f"Closest warehouse: {closest}")
+        return closest
+    
+    def closest_order(self):
+        min_dist = float('inf')
+        closest = None
+        for order in self.curr_orders:
+            dist = haversine_distance(
+                self.position['latitude'],
+                self.position['longitude'],
+                order['latitude'],
+                order['longitude']
+            )
+            if dist < min_dist:
+                min_dist = dist
+                closest = order
         return closest
 
     async def setup(self):
         print(f"{self.id} - [SETUP]")
-        b = self.MyBehav()
-        self.add_behaviour(b)
-        
-        # fsm = FSMBehaviour()
-        # fsm.add_state(name=IDLE, state=Idle(), initial=True)
-        # fsm.add_state(name=DELIVERING, state=Delivering())
-        # fsm.add_state(name=RETURNING, state=Returning())
-        # fsm.add_transition(source=IDLE, dest=DELIVERING)
-        # fsm.add_transition(source=DELIVERING, dest=RETURNING)
-        # self.add_behaviour(fsm) # template in doubt for now, various templates should be used in different states in the state machine
+        self.add_behaviour(IdleBehav())
 
     def __str__(self) -> str:
         return "{} - Drone with capacity {} and autonomy {}"\
             .format(str(self.id), self.max_capacity, self.max_capacity, 
                     self.velocity, self.warehouse_positions)
+            
+# ----------------------------------------------------------------------------------------------
     
