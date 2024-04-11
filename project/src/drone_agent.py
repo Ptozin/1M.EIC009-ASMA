@@ -41,6 +41,14 @@ class DroneParameters:
         self.max_autonomy : float = autonomy # in meters
         self.curr_capacity : int = 0
         self.curr_autonomy : float = autonomy
+        self.__path : list[dict] = [] # List of trips with their respective coordinates. E.g [{"order_X": {"latitude": 37.7749, "longitude": -122.4194}}]
+        
+        test = [
+            {"order_X": {"latitude": 37.7749, "longitude": -122.4194}},
+            {"order_Y": {"latitude": 37.7749, "longitude": -122.4194}},
+            {"center_Z": {"latitude": 37.7749, "longitude": -122.4194}},            
+        ]
+    
     
     def add_trip(self, distance : float) -> None:
         self.__total_trips += 1
@@ -95,6 +103,35 @@ class DroneParameters:
                             {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"}
                         ]
                     )
+              
+    def store_results(self) -> None:
+        """
+        Method to store the final metrics of the drone and of its trips
+        """
+        
+        with open(f"logs/{self.id}.json", "w") as f:
+            json.dump(
+                { 
+                    "Drone_parameters": {
+                        "id":       self.id,
+                        "capacity": self.max_capacity,
+                        "autonomy": self.max_autonomy,
+                        "velocity": self.velocity,
+                    },
+                    "Metrics":
+                    {
+                        "Total Trips": self.__total_trips,
+                        "Total Distance": round(self.__total_distance,2),
+                        "Min Distance": round(self.__min_distance_on_trip,2),
+                        "Max Distance": round(self.__max_distance_on_trip,2),
+                        "Avg Distance": round(self.__avg_distance_on_trip,2),
+                        "Orders Delivered": self.orders_delivered,
+                        "Occupiance Rate": round(self.__occupiance_rate,2),
+                        "Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"
+                    },
+                    "Path": self.__path
+                }, 
+                f)
               
         
 # ----------------------------------------------------------------------------------------------
@@ -262,6 +299,10 @@ class DroneAgent(Agent):
         self.params = DroneParameters(id, capacity, autonomy, velocity)
         
         self.logger = Logger(filename = id)
+
+# ----------------------------------------------------------------------------------------------
+# Warehouse management
+# ----------------------------------------------------------------------------------------------
 
     def destiny_warehouse(self, latitude : float, longitude : float) -> str:
         """
@@ -432,6 +473,9 @@ class DroneAgent(Agent):
 # ----------------------------------------------------------------------------------------------
 
     async def setup(self) -> None:
+        """
+        Agent's setup method. It adds the IdleBehav behaviour.
+        """
         print(f"{self.params.id} - [SETUP]")
         self.add_behaviour(IdleBehav())
 

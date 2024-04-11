@@ -5,7 +5,7 @@ from dash import dcc
 import plotly.express as px
 import pandas as pd
 
-def read_data_from_file(file = "delivery_center1.csv") -> pd.DataFrame:
+def read_data_from_file(file : str) -> pd.DataFrame:
     """
     data format:
     
@@ -15,7 +15,7 @@ def read_data_from_file(file = "delivery_center1.csv") -> pd.DataFrame:
     
     `order_1;37,7749;-122,4194;100`
     """
-    warehouse : pd = pd.read_csv('data/' + file, sep=';')
+    warehouse : pd = pd.read_csv('data/small/' + file, sep=';')
     warehouse['latitude'] = warehouse['latitude'].str.replace(',', '.').astype(float)
     warehouse['longitude'] = warehouse['longitude'].str.replace(',', '.').astype(float)
 
