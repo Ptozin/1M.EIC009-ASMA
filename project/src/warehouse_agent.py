@@ -48,7 +48,7 @@ class WarehouseAgent(Agent):
         async def run(self):
             recv_msg = await self.receive(timeout=5)
             if recv_msg is None:
-                print(f"{self.agent.id} - Waiting for available drones... - Inventory: ({self.agent.inventory_size}/{self.agent.initial_inventory_size})")
+                print("[HANDOUT] Waiting for available drones... - {}".format(str(self.agent)))
             else:
                 print(f"{self.agent.id} - [MESSAGE] {recv_msg.body}")
                 drone_data = json.loads(recv_msg.body) 
@@ -125,5 +125,9 @@ class WarehouseAgent(Agent):
         print(f"{self.id} - [SETUP]")
         b = self.HandOutBehav()
         self.add_behaviour(b)
+        
+    def __str__ (self) -> str:
+        return "Warehouse {} - at ({}, {}) with ({}/{}) orders remaining"\
+            .format(self.id, self.latitude, self.longitude, self.inventory_size, self.initial_inventory_size)
 
 # ----------------------------------------------------------------------------------------------
