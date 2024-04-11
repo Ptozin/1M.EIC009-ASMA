@@ -6,22 +6,13 @@ import plotly.express as px
 import pandas as pd
 
 def read_data_from_file(file : str) -> pd.DataFrame:
-    """
-    data format:
-    
-    `id;latitude;longitude;weight`
-    
-    e.g.:
-    
-    `order_1;37,7749;-122,4194;100`
-    """
     warehouse : pd = pd.read_csv('data/small/' + file, sep=';')
     warehouse['latitude'] = warehouse['latitude'].str.replace(',', '.').astype(float)
     warehouse['longitude'] = warehouse['longitude'].str.replace(',', '.').astype(float)
 
     return warehouse
 
-def plot_map(files = ["delivery_center1.csv", "delivery_center2.csv"]):
+def plot_centers_and_orders(files = ["delivery_center1.csv", "delivery_center2.csv"]):
     fig = px.scatter_geo()
     for file in files:
         data = read_data_from_file(file)
@@ -47,7 +38,7 @@ def plot_map(files = ["delivery_center1.csv", "delivery_center2.csv"]):
 
 app = Dash(__name__)
 
-fig = plot_map()
+fig = plot_centers_and_orders()
 
 app.layout = html.Div([
     html.H1('Armazon Delivery Simulation'),

@@ -48,9 +48,20 @@ class DroneParameters:
             {"order_Y": {"latitude": 37.7749, "longitude": -122.4194}},
             {"center_Z": {"latitude": 37.7749, "longitude": -122.4194}},            
         ]
+
+    # ----------------------------------------------------------------------------------------------
+    # Orders management
+    # ----------------------------------------------------------------------------------------------   
     
-    
-    def add_trip(self, distance : float) -> None:
+    def add_trip(self, distance : float, dest_warehouse : dict) -> None:
+        """
+        Method to add a trip to the drone's metrics.
+        Also updates the path with the destination warehouse.
+
+        Args:
+            distance (float): The distance of the trip.
+            dest_warehouse (dict): The destination warehouse with its coordinates.
+        """
         self.__total_trips += 1
         self.__total_distance += distance
         self.__min_distance_on_trip = min(self.__min_distance_on_trip, distance)
@@ -58,12 +69,27 @@ class DroneParameters:
         self.__avg_distance_on_trip = self.__total_distance / self.__total_trips
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
         self.__energy_consumption = self.__total_distance / self.max_autonomy
+        self.__path.append(dest_warehouse)
         
-    def add_order(self, capacity : int) -> None:
+    def add_order(self, capacity : int, destination : dict) -> None:
+        """
+        Method to add an order to the drone's metrics.
+
+        Args:
+            capacity (int): The capacity of the order.
+            destination (dict): The destination of the order with its coordinates.
+        """
         self.__orders_to_deliver += 1
         self.curr_capacity += capacity
+        self.__path.append(destination)
     
     def drop_order(self, capacity : int) -> None:
+        """
+        Method to drop an order from the drone's metrics.
+
+        Args:
+            capacity (int): The capacity of the order.
+        """
         self.__orders_to_deliver -= 1
         self.orders_delivered += 1
         self.curr_capacity -= capacity
@@ -81,6 +107,8 @@ class DroneParameters:
             "autonomy": self.max_autonomy,
             "velocity": self.velocity,
         })
+        
+    # ----------------------------------------------------------------------------------------------
         
     def metrics(self) -> None:
         """
@@ -183,6 +211,7 @@ class IdleBehav(CyclicBehaviour):
         elif self.exit_code == STATE_DISMISSED:
             # Show agent metrics and stop
             self.agent.logger.log(self.agent.params.metrics())
+            self.agent.params.store_results()
             await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
@@ -300,9 +329,9 @@ class DroneAgent(Agent):
         
         self.logger = Logger(filename = id)
 
-# ----------------------------------------------------------------------------------------------
-# Warehouse management
-# ----------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------
+    # Warehouse management
+    # ----------------------------------------------------------------------------------------------
 
     def destiny_warehouse(self, latitude : float, longitude : float) -> str:
         """
@@ -367,9 +396,9 @@ class DroneAgent(Agent):
     def arrived_to_target(self, target_lat : float, target_lon : float) -> bool:
         return self.position['latitude'] == target_lat and self.position['longitude'] == target_lon
 
-# ----------------------------------------------------------------------------------------------
-# Orders management
-# ----------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------
+    # Orders management
+    # ----------------------------------------------------------------------------------------------
 
     def closest_order(self) -> DeliveryOrder:
         """
@@ -402,7 +431,7 @@ class DroneAgent(Agent):
         """
         self.curr_orders.append(order)
         self.total_orders.append(order)
-        self.params.add_order(order.weight)
+        self.params.add_order(order.weight, order.get_order_destination_position())
 
     def drop_order(self, order : DeliveryOrder) -> None:
         """
@@ -456,7 +485,12 @@ class DroneAgent(Agent):
                     self.warehouse_positions[closest_warehouse]['latitude'], self.warehouse_positions[closest_warehouse]['longitude'])
                 self.next_warehouse_id = closest_warehouse
                 
-        self.params.add_trip(total_distance)        
+        self.params.add_trip(total_distance, {
+            self.next_warehouse_id: {
+                "latitude": self.warehouse_positions[self.next_warehouse_id]["latitude"],
+                "longitude": self.warehouse_positions[self.next_warehouse_id]["longitude"]
+            }
+        })        
                 
         return total_distance
 
@@ -469,8 +503,7 @@ class DroneAgent(Agent):
         """
         return self.warehouse_positions[self.next_warehouse_id]['latitude'], self.warehouse_positions[self.next_warehouse_id]['longitude']
         
-
-# ----------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------
 
     async def setup(self) -> None:
         """

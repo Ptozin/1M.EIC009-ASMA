@@ -52,6 +52,15 @@ class DeliveryOrder:
     #    elif self.order_status == STATUS["DELIVERING"]:
     #        self.order_status = STATUS["DELIVERED"]
 
+    def get_order_destination_position(self) -> dict:
+        """
+        Get the order_id with destination position.
+
+        Returns:
+            dict: The order_id with destination position.
+        """
+        return {self.id : self.destination_position}
+    
     def __str__(self) -> str:
         return "Order {} - from {} to {} with weight {}"\
             .format(self.id, (self.start_position['latitude'], 
