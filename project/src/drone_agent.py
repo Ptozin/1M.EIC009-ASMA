@@ -202,15 +202,17 @@ class ReturnBehav(PeriodicBehaviour):
 
         # TODO: later dynamically define next warehouse based on proposals
 
+        next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
+        
         self.agent.position = next_position(
                 self.agent.position['latitude'],
                 self.agent.position['longitude'],
-                self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'],
-                self.agent.warehouse_positions[self.agent.next_warehouse]['longitude'],
+                next_warehouse_lat,
+                next_warehouse_lon,
                 self.agent.params.velocity * TIME_MULTIPLIER
             )
         
-        if self.agent.arrived_to_target(self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.next_warehouse]['longitude']):
+        if self.agent.arrived_to_target(next_warehouse_lat, next_warehouse_lon):
             self.agent.params.curr_autonomy = self.agent.params.max_autonomy
             self.agent.next_warehouse = None
             self.kill(exit_code=STATE_RETURNED)
@@ -220,8 +222,8 @@ class ReturnBehav(PeriodicBehaviour):
                         round(haversine_distance(
                             self.agent.position['latitude'], 
                             self.agent.position['longitude'], 
-                            self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'], 
-                            self.agent.warehouse_positions[self.agent.next_warehouse]['longitude']
+                            next_warehouse_lat,
+                            next_warehouse_lon
                         ),2)
                     )
                 )
@@ -249,7 +251,7 @@ class DroneAgent(Agent):
         self.required_autonomy : float = 0.0
         
         self.warehouse_positions : dict = warehouse_positions    
-        self.next_warehouse : dict = None
+        self.next_warehouse_id : dict = None
         self.distance_to_next_warehouse = 0.0
     
         self.position = {
@@ -411,11 +413,21 @@ class DroneAgent(Agent):
                 total_distance += haversine_distance(
                     last_order_position['latitude'], last_order_position['longitude'],
                     self.warehouse_positions[closest_warehouse]['latitude'], self.warehouse_positions[closest_warehouse]['longitude'])
-                self.next_warehouse = closest_warehouse
+                self.next_warehouse_id = closest_warehouse
                 
         self.params.add_trip(total_distance)        
                 
         return total_distance
+
+    def get_next_warehouse_position(self) -> tuple:
+        """
+        Method to get the next warehouse position.
+
+        Returns:
+            tuple: The latitude and longitude of the next warehouse.
+        """
+        return self.warehouse_positions[self.next_warehouse_id]['latitude'], self.warehouse_positions[self.next_warehouse_id]['longitude']
+        
 
 # ----------------------------------------------------------------------------------------------
 
