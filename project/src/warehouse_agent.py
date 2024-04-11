@@ -50,7 +50,6 @@ class WarehouseAgent(Agent):
             if recv_msg is None:
                 print("[HANDOUT] Waiting for available drones... - {}".format(str(self.agent)))
             else:
-                print(f"{self.agent.id} - [MESSAGE] {recv_msg.body}")
                 drone_data = json.loads(recv_msg.body) 
 
                 # Send orders to drone
@@ -76,14 +75,14 @@ class WarehouseAgent(Agent):
     class RefuseOrderBehav(CyclicBehaviour):
         async def on_start(self) -> None:
             self.counter = 0
-            self.limit = 5
+            self.limit = 3
         
         async def run(self):
             self.counter += 1
             recv_msg = await self.receive(timeout=5)
             if recv_msg is None:
-                print(f"{self.agent.id} - [REFUSING] - Waiting for available drones...")
-                if self.counter == self.limit:
+                print(f"{self.agent.id} - [REFUSING] - Waiting for available drones... try {self.counter}/{self.limit}")
+                if self.counter >= self.limit:
                     self.kill()
             else:
                 self.counter = 0 

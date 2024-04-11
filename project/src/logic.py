@@ -6,7 +6,7 @@ class DeliveryLogic:
     def __init__(self, delivery_drones, warehouses):
         
         # Create warehouse agents
-        self.warehouses = [
+        self.warehouses : list[WarehouseAgent] = [
             WarehouseAgent(
                 warehouse["id"],
                 warehouse["jid"],
@@ -18,7 +18,7 @@ class DeliveryLogic:
         ]
         
         # Store warehouse positions for drone navigation
-        warehouse_positions = {}
+        warehouse_positions : dict = {}
         for warehouse, _ in warehouses:
             warehouse_positions[warehouse["id"]] = {
                 "latitude": warehouse["latitude"],
@@ -36,7 +36,7 @@ class DeliveryLogic:
                 drone["capacity"],
                 drone["autonomy"],
                 drone["velocity"],
-                warehouse_positions
+                warehouse_positions.copy() # Need to copy the dictionary to avoid reference issues
             ) for drone in delivery_drones
         ]
 
@@ -49,13 +49,12 @@ class DeliveryLogic:
         
         for drone in self.delivery_drones:
             await drone.start()
-            # drone.web.start(hostname="localhost", port=10000)
 
-        drone = self.delivery_drones[0]
-        await spade.wait_until_finished(drone)
-        await drone.stop()
+        for warehouse in self.warehouses:
+            await spade.wait_until_finished(warehouse)
         
     def __exit__(self, exc_type, exc_value, traceback):
+        print("Exiting...")
         for drone in self.delivery_drones:
             drone.stop()
         for warehouse in self.warehouses:

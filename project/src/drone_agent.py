@@ -16,36 +16,97 @@ STATE_DISMISSED = 20
 STATE_ERROR = 30
 STATE_RETURNED = 40
 
-TIME_MULTIPLIER = 50 # increases the speed to 10km/s
+TIME_MULTIPLIER = 500 # increases the speed per tick to 10km/s, with a base velocity of 20 m/s
 
 # ----------------------------------------------------------------------------------------------
 
-class DroneMetrics:
+class DroneParameters:
+    def __init__(self, id : str, capacity : int, autonomy : float , velocity : float) -> None:
+        # ---- Metrics ----
+        self.__total_trips : int = 0
+        self.__total_distance : float = 0.0 # Can be converted to time with velocity
+        self.__min_distance_on_trip : float = float('inf') # Measured in meters
+        self.__max_distance_on_trip : float = 0.0 # Measured in meters
+        self.__avg_distance_on_trip : float = 0.0 # Measured in meters
+        self.orders_delivered : int = 0 # Total Orders Delivered
+        self.__orders_to_deliver : int = 0 # Number of orders carried by the drone on the current trip
+        self.__occupiance_rate : float = 0.0 # Average Occupiance Rate Per Trip, calculated with `orders_delivered / total_trips`
+        self.__energy_consumption : float = 0.0 # Total Energy Consumption, calculated with `total_distance / autonomy`
+
+        # --- Parameters ---
+        self.id : str = id
+        self.velocity : float = velocity # in m/s
+        self.max_capacity : int = capacity # in kg
+        self.max_autonomy : float = autonomy # in meters
+        self.curr_capacity : int = 0
+        self.curr_autonomy : float = autonomy
     
-    def __init__(self):
-        # Total Delivery Time
-        self.delivery_time = 0.0
-        # Total Distance Travelled
-        self.distance_travelled = 0.0
-        self.orders_delivered = 0
+    def add_trip(self, distance : float) -> None:
+        self.__total_trips += 1
+        self.__total_distance += distance
+        self.__min_distance_on_trip = min(self.__min_distance_on_trip, distance)
+        self.__max_distance_on_trip = max(self.__max_distance_on_trip, distance)
+        self.__avg_distance_on_trip = self.__total_distance / self.__total_trips
+        self.__occupiance_rate = self.orders_delivered / self.__total_trips
+        self.__energy_consumption = self.__total_distance / self.max_autonomy
         
-        # Average Occupiance Rate Per Trip
-        self.occupiance_rate = 0.0
+    def add_order(self, capacity : int) -> None:
+        self.__orders_to_deliver += 1
+        self.curr_capacity += capacity
+    
+    def drop_order(self, capacity : int) -> None:
+        self.__orders_to_deliver -= 1
+        self.orders_delivered += 1
+        self.curr_capacity -= capacity
         
-        # Total Energy Consumption
-        self.energy_consumption = 0.0
+    def __str__(self) -> str:
+        return "{} - Drone with capacity ({}/{}) and autonomy ({}/{}) delivering {} orders, with {} completed orders"\
+            .format(self.id, self.curr_capacity, self.max_capacity, 
+                    round(self.curr_autonomy,2), self.max_autonomy, 
+                    self.__orders_to_deliver, self.orders_delivered)
+            
+    def __repr__(self) -> str:
+        return json.dumps({
+            "id":       self.id,
+            "capacity": self.max_capacity,
+            "autonomy": self.max_autonomy,
+            "velocity": self.velocity,
+        })
+        
+    def metrics(self) -> None:
+        """
+        Method to print the final metrics of the drone.
+        """
+        
+        # Set the final metrics
+        self.__occupiance_rate = self.orders_delivered / self.__total_trips
+        
+        print("{} Metrics - {}"\
+              .format(self.id, 
+                      [
+                          {"Total Trips": self.__total_trips},
+                          {"Total Distance": round(self.__total_distance,2)},
+                          {"Min Distance": round(self.__min_distance_on_trip,2)},
+                          {"Max Distance": round(self.__max_distance_on_trip,2)},
+                          {"Avg Distance": round(self.__avg_distance_on_trip,2)},
+                          {"Orders Delivered": self.orders_delivered},
+                          {"Occupiance Rate": round(self.__occupiance_rate,2)},
+                          {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"}
+                      ]
+                      )
+              )
         
         
-    def update_metrics(self, delivery_time, occupiance_rate, energy_consumption, distance_travelled, orders_delivered):
-        self.delivery_time += delivery_time
-        self.occupiance_rate += occupiance_rate
-        self.energy_consumption += energy_consumption
-        self.distance_travelled += distance_travelled
-        self.orders_delivered += orders_delivered
+        
 
 # ----------------------------------------------------------------------------------------------
 
 class IdleBehav(CyclicBehaviour):
+    async def on_start(self) -> None:
+        self.counter = 0
+        self.limit = 3
+    
+    
     async def run(self):
         target = self.agent.closest_warehouse()
         msg = Message(to=target)
@@ -54,20 +115,27 @@ class IdleBehav(CyclicBehaviour):
         await self.send(msg)
         msg = await self.receive(timeout=5)
         if msg is None:
-            print(f"[{self.agent.id}] Waiting for tasks...")
-        else:            
+            self.counter += 1
+            if self.counter >= self.limit:
+                self.kill(exit_code=STATE_DISMISSED)
+                return 
+            print(f"[{self.agent.params.id}] Waiting for tasks...")
+        else:
+            self.counter = 0            
             if msg.metadata["performative"] == "inform":
                 proposed_orders = json.loads(msg.body)
                 orders = []
                 for order in proposed_orders:
                     order = json.loads(order)
                     orders.append(DeliveryOrder(**order))
+                    
+                # TODO: Required Autonomy should be taken into account later
                 self.agent.required_autonomy = self.agent.compute_route(orders)
                 self.kill(exit_code=STATE_DELIVERING)
                 
             elif msg.metadata["performative"] == "refuse":
                 # remove warehouse from available list, since it has no orders
-                print(f"{self.agent.id} - [REFUSED] {msg.sender}")
+                print(f"{self.agent.params.id} - [REFUSED] {msg.sender}")
                 self.agent.remove_warehouse(target.split("@")[0])
                 
                 # if no more warehouses available, dismiss agent
@@ -78,6 +146,8 @@ class IdleBehav(CyclicBehaviour):
         if self.exit_code == STATE_DELIVERING:
             self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
         elif self.exit_code == STATE_DISMISSED:
+            # Show agent metrics and stop
+            self.agent.params.metrics()
             await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
@@ -95,10 +165,10 @@ class DelivBehav(PeriodicBehaviour):
                     self.agent.position['longitude'],
                     self.agent.curr_order.destination_position['latitude'],
                     self.agent.curr_order.destination_position['longitude'],
-                    self.agent.velocity * TIME_MULTIPLIER
+                    self.agent.params.velocity * TIME_MULTIPLIER
                 )
             
-            self.agent.curr_autonomy -= haversine_distance(
+            self.agent.params.curr_autonomy -= haversine_distance(
                 self.agent.position['latitude'],
                 self.agent.position['longitude'],
                 position['latitude'],
@@ -107,17 +177,19 @@ class DelivBehav(PeriodicBehaviour):
             
             self.agent.position = position
             
-            print("[DELIVERING] {} - {} meters to target"\
+            print("[DELIVERING] {} - {} meters to next drop-off"\
                 .format(str(self.agent), 
-                        haversine_distance(self.agent.position['latitude'], 
+                        round(
+                            haversine_distance(self.agent.position['latitude'], 
                                            self.agent.position['longitude'], 
                                            self.agent.curr_order.destination_position['latitude'], 
-                                           self.agent.curr_order.destination_position['longitude'])
-                        )
+                                           self.agent.curr_order.destination_position['longitude']),
+                            2
+                        ))
                 )
             
             if self.agent.arrived_to_target(self.agent.curr_order.destination_position['latitude'], self.agent.curr_order.destination_position['longitude']):
-                self.agent.remove_orders(self.agent.curr_order)
+                self.agent.drop_order(self.agent.curr_order)
     
     async def on_end(self):
         self.agent.add_behaviour(ReturnBehav(period=1.0, start_at=datetime.datetime.now()))
@@ -137,26 +209,34 @@ class ReturnBehav(PeriodicBehaviour):
                 self.agent.position['longitude'],
                 self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'],
                 self.agent.warehouse_positions[self.agent.next_warehouse]['longitude'],
-                self.agent.velocity * TIME_MULTIPLIER
+                self.agent.params.velocity * TIME_MULTIPLIER
             )
         
         if self.agent.arrived_to_target(self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.next_warehouse]['longitude']):
-            self.agent.curr_autonomy = self.agent.max_autonomy
+            self.agent.params.curr_autonomy = self.agent.params.max_autonomy
             self.agent.next_warehouse = None
             self.kill(exit_code=STATE_RETURNED)
         else:
-            # show prints of the distance to the warehouse
-            print(f"{self.agent.id} - [RETURNING] - Distance to warehouse: {haversine_distance(self.agent.position['latitude'], self.agent.position['longitude'], self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'], self.agent.warehouse_positions[self.agent.next_warehouse]['longitude'])} meters")
+            print("[RETURNING] {} - Distance to warehouse: {} meters"\
+                .format(self.agent.params.id, 
+                        round(haversine_distance(
+                            self.agent.position['latitude'], 
+                            self.agent.position['longitude'], 
+                            self.agent.warehouse_positions[self.agent.next_warehouse]['latitude'], 
+                            self.agent.warehouse_positions[self.agent.next_warehouse]['longitude']
+                        ),2)
+                    )
+                )
     
     async def on_end(self):
         if self.exit_code == STATE_ERROR:
-            print (f"{self.agent.id} - [ERROR] - No warehouse available to return to. Self Destruction activated.")
+            print (f"[ERROR] {self.agent.params.id} - No warehouse available to return to. Self Destruction activated.")
             await self.agent.stop()
         elif self.exit_code == STATE_RETURNED:
-            print(f"{self.agent.id} - [RETURNED]")
+            print(f"[RETURNED] {self.agent.params.id}")
             self.agent.add_behaviour(IdleBehav())
         else:
-            print(f"{self.agent.id} - [ERROR] - Unexpected error")
+            print(f"[ERROR] {self.agent.params.id} - Unexpected error")
             await self.agent.stop()
         
 # ----------------------------------------------------------------------------------------------
@@ -164,18 +244,11 @@ class ReturnBehav(PeriodicBehaviour):
 class DroneAgent(Agent):
     def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}) -> None:
         super().__init__(jid, password)
-        self.id : str = id
-        self.max_capacity : int = capacity # in kg
-        self.max_autonomy : float = autonomy # in meters
-        self.velocity : float = velocity # in m/s
-        self.total_orders_counter : int = 0
         self.total_orders : list[DeliveryOrder] = [] 
-        
-        self.curr_capacity : int = 0
-        self.curr_autonomy : float = autonomy
-        self.required_autonomy : float = 0.0
         self.curr_orders : list[DeliveryOrder] = []
-        self.curr_order = None
+        self.curr_order : DeliveryOrder = None
+        
+        self.required_autonomy : float = 0.0
         
         self.warehouse_positions : dict = warehouse_positions    
         self.next_warehouse : dict = None
@@ -185,6 +258,8 @@ class DroneAgent(Agent):
             "latitude": warehouse_positions[initialPos]["latitude"],
             "longitude": warehouse_positions[initialPos]["longitude"]
         } 
+        
+        self.params = DroneParameters(id, capacity, autonomy, velocity)
 
     def destiny_warehouse(self, latitude : float, longitude : float) -> str:
         """
@@ -274,7 +349,7 @@ class DroneAgent(Agent):
                 closest = order
         return closest
 
-    def add_orders(self, order : DeliveryOrder) -> None:
+    def add_order(self, order : DeliveryOrder) -> None:
         """
         Method to add an order to the drone's current orders.
         Updates the current capacity and the current orders list.
@@ -284,10 +359,9 @@ class DroneAgent(Agent):
         """
         self.curr_orders.append(order)
         self.total_orders.append(order)
-        self.total_orders_counter += 1
-        self.curr_capacity += order.weight
+        self.params.add_order(order.weight)
 
-    def remove_orders(self, order : DeliveryOrder) -> None:
+    def drop_order(self, order : DeliveryOrder) -> None:
         """
         Method to remove an order from the drone's current orders.
         Updates the current capacity and empties the current order field
@@ -295,8 +369,8 @@ class DroneAgent(Agent):
         Args:
             order (DeliveryOrder): The order to add.
         """
+        self.params.drop_order(order.weight)
         self.curr_orders.remove(order)
-        self.curr_capacity -= order.weight
         self.curr_order = None
 
     def compute_route(self, orders : list[DeliveryOrder]) -> float:
@@ -330,7 +404,7 @@ class DroneAgent(Agent):
                 ordered_queue.append(next_order)
                 orders.remove(next_order)
             for order in ordered_queue:
-                self.add_orders(order)
+                self.add_order(order)
             if self.curr_orders:
                 last_order_position = self.curr_orders[-1].destination_position
                 closest_warehouse = self.destiny_warehouse(last_order_position['latitude'], last_order_position['longitude'])
@@ -338,26 +412,26 @@ class DroneAgent(Agent):
                     last_order_position['latitude'], last_order_position['longitude'],
                     self.warehouse_positions[closest_warehouse]['latitude'], self.warehouse_positions[closest_warehouse]['longitude'])
                 self.next_warehouse = closest_warehouse
+                
+        self.params.add_trip(total_distance)        
+                
         return total_distance
 
 # ----------------------------------------------------------------------------------------------
 
     async def setup(self) -> None:
-        print(f"{self.id} - [SETUP]")
+        print(f"{self.params.id} - [SETUP]")
         self.add_behaviour(IdleBehav())
 
     def __str__(self) -> str:
-        return "{} - Drone with capacity ({}/{}) and autonomy ({}/{}) delivered {} orders"\
-            .format(self.id, self.curr_capacity, self.max_capacity, 
-                    round(self.curr_autonomy,2), self.max_autonomy, 
-                    self.total_orders_counter)
+        return str(self.params)
             
     def __repr__(self) -> str:
         return json.dumps({
-            "id": self.id,
-            "capacity": self.max_capacity,
-            "autonomy": self.max_autonomy,
-            "velocity": self.velocity,
+            "id": self.params.id,
+            "capacity": self.params.max_capacity,
+            "autonomy": self.params.max_autonomy,
+            "velocity": self.params.velocity,
         })
             
 # ----------------------------------------------------------------------------------------------
