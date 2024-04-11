@@ -6,6 +6,7 @@ from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 from spade.template import Template
 import json
+from misc.log import Logger
 
 # ----------------------------------------------------------------------------------------------
 
@@ -48,7 +49,7 @@ class WarehouseAgent(Agent):
         async def run(self):
             recv_msg = await self.receive(timeout=5)
             if recv_msg is None:
-                print("[HANDOUT] Waiting for available drones... - {}".format(str(self.agent)))
+                self.agent.logger.log("[HANDOUT] Waiting for available drones... - {}".format(str(self.agent)))
             else:
                 drone_data = json.loads(recv_msg.body) 
 
@@ -59,8 +60,9 @@ class WarehouseAgent(Agent):
                                 
                 await self.send(msg)
                 
+                self.agent.logger.log(f"{self.agent.id} - Inventory: ({len(self.agent.inventory)}/{self.agent.initial_inventory_size})")
                 print(f"{self.agent.id} - Inventory: ({len(self.agent.inventory)}/{self.agent.initial_inventory_size})")
-                
+
                 if len(self.agent.inventory) == 0:
                     self.kill(exit_code=STATE_DISMISSED)
                     
@@ -68,8 +70,6 @@ class WarehouseAgent(Agent):
             if self.exit_code == STATE_DISMISSED:
                 self.agent.add_behaviour(self.agent.RefuseOrderBehav())
             else:
-                # print(f"{self.agent.id} - [RESTART]")
-                # self.agent.add_behaviour(self)
                 await self.agent.stop()
                 
     class RefuseOrderBehav(CyclicBehaviour):
@@ -81,18 +81,18 @@ class WarehouseAgent(Agent):
             self.counter += 1
             recv_msg = await self.receive(timeout=5)
             if recv_msg is None:
-                print(f"{self.agent.id} - [REFUSING] - Waiting for available drones... try {self.counter}/{self.limit}")
+                self.agent.logger.log(f"{self.agent.id} - [REFUSING] - Waiting for available drones... try {self.counter}/{self.limit}")
                 if self.counter >= self.limit:
                     self.kill()
             else:
                 self.counter = 0 
-                print(f"{self.agent.id} - [REFUSING] - [MESSAGE] {recv_msg.body}")
+                self.agent.logger.log(f"{self.agent.id} - [REFUSING] - [MESSAGE] {recv_msg.body}")
                 msg = Message(to=str(recv_msg.sender))
                 msg.set_metadata("performative", "refuse")
                 await self.send(msg)
         
         async def on_end(self):
-            print(f"{self.agent.id} - [DISMISSING] No more orders to deliver & drones to attend to.")
+            self.agent.logger.log(f"{self.agent.id} - [DISMISSING] No more orders to deliver & drones to attend to.")
             await self.agent.stop()
     
     def __init__(self, id, jid, password, latitude, longitude, orders) -> None:
@@ -120,8 +120,10 @@ class WarehouseAgent(Agent):
         self.initial_inventory_size = len(self.inventory)
         self.inventory_size = len(self.inventory)
 
+        self.logger = Logger(filename=id)
+
     async def setup(self):
-        print(f"{self.id} - [SETUP]")
+        self.logger.log(f"{self.id} - [SETUP]")
         b = self.HandOutBehav()
         self.add_behaviour(b)
         

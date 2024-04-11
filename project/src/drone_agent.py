@@ -7,6 +7,7 @@ from spade.behaviour import CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
 from misc.distance import haversine_distance, next_position
 from order import DeliveryOrder
+from misc.log import Logger
 
 # ----------------------------------------------------------------------------------------------
 
@@ -81,24 +82,21 @@ class DroneParameters:
         # Set the final metrics
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
         
-        print("{} Metrics - {}"\
+        return "{} Metrics - {}"\
               .format(self.id, 
-                      [
-                          {"Total Trips": self.__total_trips},
-                          {"Total Distance": round(self.__total_distance,2)},
-                          {"Min Distance": round(self.__min_distance_on_trip,2)},
-                          {"Max Distance": round(self.__max_distance_on_trip,2)},
-                          {"Avg Distance": round(self.__avg_distance_on_trip,2)},
-                          {"Orders Delivered": self.orders_delivered},
-                          {"Occupiance Rate": round(self.__occupiance_rate,2)},
-                          {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"}
-                      ]
-                      )
-              )
+                        [
+                            {"Total Trips": self.__total_trips},
+                            {"Total Distance": round(self.__total_distance,2)},
+                            {"Min Distance": round(self.__min_distance_on_trip,2)},
+                            {"Max Distance": round(self.__max_distance_on_trip,2)},
+                            {"Avg Distance": round(self.__avg_distance_on_trip,2)},
+                            {"Orders Delivered": self.orders_delivered},
+                            {"Occupiance Rate": round(self.__occupiance_rate,2)},
+                            {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"}
+                        ]
+                    )
+              
         
-        
-        
-
 # ----------------------------------------------------------------------------------------------
 
 class IdleBehav(CyclicBehaviour):
@@ -119,7 +117,7 @@ class IdleBehav(CyclicBehaviour):
             if self.counter >= self.limit:
                 self.kill(exit_code=STATE_DISMISSED)
                 return 
-            print(f"[{self.agent.params.id}] Waiting for tasks...")
+            self.agent.logger.log(f"[{self.agent.params.id}] Waiting for tasks...")
         else:
             self.counter = 0            
             if msg.metadata["performative"] == "inform":
@@ -135,7 +133,7 @@ class IdleBehav(CyclicBehaviour):
                 
             elif msg.metadata["performative"] == "refuse":
                 # remove warehouse from available list, since it has no orders
-                print(f"{self.agent.params.id} - [REFUSED] {msg.sender}")
+                self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {msg.sender}")
                 self.agent.remove_warehouse(target.split("@")[0])
                 
                 # if no more warehouses available, dismiss agent
@@ -147,7 +145,7 @@ class IdleBehav(CyclicBehaviour):
             self.agent.add_behaviour(DelivBehav(period=1.0, start_at=datetime.datetime.now()))
         elif self.exit_code == STATE_DISMISSED:
             # Show agent metrics and stop
-            self.agent.params.metrics()
+            self.agent.logger.log(self.agent.params.metrics())
             await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
@@ -177,7 +175,7 @@ class DelivBehav(PeriodicBehaviour):
             
             self.agent.position = position
             
-            print("[DELIVERING] {} - {} meters to next drop-off"\
+            self.agent.logger.log("[DELIVERING] {} - {} meters to next drop-off"\
                 .format(str(self.agent), 
                         round(
                             haversine_distance(self.agent.position['latitude'], 
@@ -217,7 +215,7 @@ class ReturnBehav(PeriodicBehaviour):
             self.agent.next_warehouse = None
             self.kill(exit_code=STATE_RETURNED)
         else:
-            print("[RETURNING] {} - Distance to warehouse: {} meters"\
+            self.agent.logger.log("[RETURNING] {} - Distance to warehouse: {} meters"\
                 .format(self.agent.params.id, 
                         round(haversine_distance(
                             self.agent.position['latitude'], 
@@ -230,13 +228,13 @@ class ReturnBehav(PeriodicBehaviour):
     
     async def on_end(self):
         if self.exit_code == STATE_ERROR:
-            print (f"[ERROR] {self.agent.params.id} - No warehouse available to return to. Self Destruction activated.")
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No warehouse available to return to. Self Destruction activated.")
             await self.agent.stop()
         elif self.exit_code == STATE_RETURNED:
-            print(f"[RETURNED] {self.agent.params.id}")
+            self.agent.logger.log(f"[RETURNED] {self.agent.params.id}")
             self.agent.add_behaviour(IdleBehav())
         else:
-            print(f"[ERROR] {self.agent.params.id} - Unexpected error")
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Unexpected error")
             await self.agent.stop()
         
 # ----------------------------------------------------------------------------------------------
@@ -260,6 +258,8 @@ class DroneAgent(Agent):
         } 
         
         self.params = DroneParameters(id, capacity, autonomy, velocity)
+        
+        self.logger = Logger(filename = id)
 
     def destiny_warehouse(self, latitude : float, longitude : float) -> str:
         """
