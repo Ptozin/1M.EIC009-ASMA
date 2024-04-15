@@ -1,21 +1,25 @@
-# app.py
-
 from dash import Dash, html
 from dash import dcc
 import plotly.express as px
 import pandas as pd
+import json
 
-def read_data_from_file(file : str) -> pd.DataFrame:
+def load_static_data(file : str) -> pd.DataFrame:
     warehouse : pd = pd.read_csv('data/small/' + file, sep=';')
     warehouse['latitude'] = warehouse['latitude'].str.replace(',', '.').astype(float)
     warehouse['longitude'] = warehouse['longitude'].str.replace(',', '.').astype(float)
 
     return warehouse
 
+def read_drone_data(file : str):
+    with open('logs/' + file) as f:
+        data = json.load(f)
+    return data
+
 def plot_centers_and_orders(files = ["delivery_center1.csv", "delivery_center2.csv"]):
     fig = px.scatter_geo()
     for file in files:
-        data = read_data_from_file(file)
+        data = load_static_data(file)
         center = data.iloc[0]
         orders = data.iloc[1:]
         
