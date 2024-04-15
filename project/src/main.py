@@ -4,6 +4,7 @@ from logic import DeliveryLogic
 from parse_data import parse_data
 import threading
 from visualization import WebApp
+from time import sleep
 
 def parse_args() -> argparse.Namespace:
     """
@@ -29,19 +30,19 @@ def main() -> None:
     delivery_drones, warehouses = parse_data(args.data == "original")
     
     # Setup web app on a separate thread
-    #web_app = WebApp()
+    web_app = WebApp()
     
-    #stop_thread = False
-    #
-    #server_thread = threading.Thread(target=web_app.socketio.run, args=(web_app.app,), kwargs={'port': 8050})
-    #server_thread.start()
+    server_thread = threading.Thread(target=web_app.run)
+    server_thread.daemon = True
+    server_thread.start()
+    # Wait for the server to start
+    sleep(3)
     
     # Setup delivery logic
     DeliveryLogic(delivery_drones, warehouses)
     
     # Kill the server thread
-    # server_thread.raise_exception()
-    # server_thread.join()
+    exit(0)
         
 
 if __name__ == "__main__":

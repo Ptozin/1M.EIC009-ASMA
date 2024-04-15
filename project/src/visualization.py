@@ -17,6 +17,9 @@ class WebApp:
         self.app : Flask = Flask(__name__, template_folder='./visualization/templates')
         self.socketio = SocketIO(self.app)
         
+        self.debug = False
+        self.use_reloader = False
+        
         self.app.add_url_rule("/", "home", self.home)
         self.app.add_url_rule("/updated_data", "updated_data", self.randomizer)
         self.app.add_url_rule("/get_data", "new_data", self.get_data)
@@ -47,7 +50,7 @@ class WebApp:
              
         
     def run(self) -> None:
-        self.app.run(host="0.0.0.0", port=8050, debug=True)
+        self.app.run(host="0.0.0.0", port=8050, debug=self.debug, use_reloader=self.use_reloader)
         
     def home(self) -> str:
         return(render_template('index.html'))
@@ -90,4 +93,6 @@ class WebApp:
         
 if __name__ == "__main__": 
     webApp = WebApp()
+    webApp.debug = True
+    webApp.use_reloader = True
     webApp.run()
