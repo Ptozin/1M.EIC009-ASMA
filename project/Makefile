@@ -31,10 +31,10 @@ install: venv
 	uv $(PIP) install -e src$(SEP)misc$(SEP)
 
 run:
-	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)__main__.py -d $(ARGS)
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)main.py -d $(ARGS)
 
 visualization:
-	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization2.py
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization.py
 
 # Clean up generated files and virtual environment
 

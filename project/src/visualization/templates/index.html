@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <!-- LEAFLET -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.4.0/dist/leaflet.css"
+      integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
+        crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.4.0/dist/leaflet.js"
+      integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg=="
+      crossorigin=""></script>
+    <!-- END LEAFLET -->
+    <title>ASMA Project 1</title>
+  </head>
+  <body>
+    <h1>Armazon Delivery Simulation</h1>
+    <!-- LEAFLET -->
+    <div id="mapid" style="width: 100%; height: 600px;"></div>
+    <script>
+      var mymap = L.map('mapid').setView([18.986286495910905, 72.90917968750001], 12);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          id: 'mapbox.streets',
+      }).addTo(mymap);
+
+      mapMarkers = {};
+
+      var orderIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [20, 33],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [33, 33]
+      });
+
+      var completedOrderIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-black.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [15, 23],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [23, 23],
+      });
+
+      var warehouseIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [30.5, 50],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [50, 50]
+      });
+
+      var droneIcon = new L.Icon({
+        iconUrl: 'https://static-00.iconduck.com/assets.00/uav-quadcopter-icon-1024x1024-cy7ecu25.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [35, 35],
+        iconAnchor: [35, 35],
+        popupAnchor: [1, -34],
+        shadowSize: [40, 40]
+      });
+
+      // get initial data through /get_data
+      fetch('/get_data')
+        .then(response => response.json())
+        .then(data => {
+          for (var key in data) {
+            item = data[key];
+            if (item.type == 'order') {
+              marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
+              mapMarkers[item.id] = marker;
+            } 
+            else if (item.type == 'warehouse') {
+              marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
+              mapMarkers[item.id] = marker;
+            }
+            else {
+              marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
+              mapMarkers[item.id] = marker;
+            }
+
+            mapMarkers[item.id].bindPopup(item.id);
+          }
+        });
+
+      setInterval(function() {
+        fetch('/updated_data')
+          .then(response => response.json())
+          .then(data => {
+            for (var key in data) {
+              item = data[key];
+              // if marker exists, update its position
+              if (mapMarkers[item.id]) {
+                mapMarkers[item.id].setLatLng([item.latitude, item.longitude]);
+              }
+              // otherwise, create a new marker, according if it is a warehouse, a order or a drone
+              else {
+                if (item.type == 'order') {
+                  marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
+                  mapMarkers[item.id] = marker;
+                } 
+                else if (item.type == 'warehouse') {
+                  marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
+                  mapMarkers[item.id] = marker;
+                }
+                else {
+                  marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
+                  mapMarkers[item.id] = marker;
+                }
+                mapMarkers[item.id].bindPopup(item.id);
+              }
+
+              // Update order status
+              if (item.type == 'order' && item.status == true && item.status != mapMarkers[item.id].status) {
+                mapMarkers[item.id].status = item.status;
+                mapMarkers[item.id].setIcon(completedOrderIcon);
+              }
+            }
+          });
+      }, 3000);
+
+    </script>
+    <!-- END LEAFLET -->
+  </body>
+</html>

@@ -1,6 +1,6 @@
 spade
 docker
 pandas
-dash
+flask
 requests
-folium
+flask-socketio
