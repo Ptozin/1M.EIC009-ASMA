@@ -2,10 +2,9 @@
 
 from spade.agent import Agent
 
-from src.order import DeliveryOrder
+from order import DeliveryOrder
 from misc.log import Logger
-from behaviours.idle import IdleBehaviour
-from behaviours.visualization import EmitSetupBehav
+from warehouse.behaviours import IdleBehaviour, EmitSetupBehav
 from flask_socketio import SocketIO
             
 # ----------------------------------------------------------------------------------------------

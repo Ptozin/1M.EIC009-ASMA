@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------------------------------------
 
-from src.order import DeliveryOrder
+from order import DeliveryOrder
 from misc.distance import haversine_distance
 
 # ----------------------------------------------------------------------------------------------

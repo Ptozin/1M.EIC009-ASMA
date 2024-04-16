@@ -3,10 +3,10 @@
 import json
 from spade.agent import Agent
 
-from src.order import DeliveryOrder
+from order import DeliveryOrder
 from parameters import DroneParameters
 from misc.log import Logger
-from behaviours.available import AvailableBehaviour
+from behaviours import AvailableBehaviour, EmitSetupBehav
 from utils import *
 from flask_socketio import SocketIO
 
@@ -41,6 +41,7 @@ class DroneAgent(Agent):
         Agent's setup method. It adds the IdleBehav behaviour.
         """
         print(f"{self.params.id} - [SETUP]")
+        self.add_behaviour(EmitSetupBehav())
         self.add_behaviour(AvailableBehaviour())
 
     def __str__(self) -> str:
