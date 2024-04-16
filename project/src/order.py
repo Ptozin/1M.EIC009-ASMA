@@ -37,6 +37,12 @@ class DeliveryOrder:
         }
         
         self.order_status : bool = STATUS["FREE"]
+        
+    def update_order_status(self) -> None:
+        """
+        Update the order status to DELIVERED.
+        """
+        self.order_status = STATUS["DELIVERED"]
     
     def get_order_for_visualization(self) -> dict:
         """

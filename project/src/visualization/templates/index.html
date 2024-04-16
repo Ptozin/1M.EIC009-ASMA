@@ -17,9 +17,9 @@
     <h1>Armazon Delivery Simulation</h1>
     <h2>Metrics</h2>
     <p>
-      <b>Average distance:&ensp;</b><span id="average_distance">0.0</span> km<br>
-      <b>Average capacity:&ensp;</b><span id="average_capacity">0.0</span> %<br>
-      <b>Average autonomy:&ensp;</b><span id="average_autonomy">0.0</span> %<br>
+      <b>Total average distance:&ensp;</b><span id="average_distance">0.0</span> km<br>
+      <b>Current average capacity:&ensp;</b><span id="average_capacity">0.0</span> %<br>
+      <b>Current average autonomy:&ensp;</b><span id="average_autonomy">0.0</span> %<br>
       <b>Average orders delivered:&ensp;</b><span id="average_orders_delivered">0.0</span><br>
     </p>
     <!-- LEAFLET -->
@@ -32,8 +32,6 @@
       }).addTo(mymap);
 
       mapMarkers = {};
-
-      var TIME_INTERVAL = 3000;
 
       var orderIcon = new L.Icon({
         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
@@ -71,19 +69,6 @@
         shadowSize: [40, 40]
       });
 
-      /*
-      E.g
-        {
-          'id' : 1,
-          'type' : 'drone',
-          'latitude' : 18.986286495910905,
-          'longitude' : 72.90917968750001,
-          'distance' : 0.0,
-          'capacity' : 100.0,
-          'autonomy' : 100.0,
-          'orders_delivered' : 0,
-        }
-      */
       var dronesMetrics = {};
       var averagedDroneMetrics = {};
 
@@ -119,30 +104,26 @@
         document.getElementById('average_orders_delivered').innerHTML = averagedDroneMetrics['orders_delivered'].toFixed(2);
       }
 
-
-      // get initial data through /get_data TODO: THIS WILL BE DEPRECATED SOON
-      fetch('/get_data')
-        .then(response => response.json())
-        .then(data => {
-          for (var key in data) {
-            item = data[key];
-            if (item.type == 'order') {
-              marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
-              mapMarkers[item.id] = marker;
-            } 
-            else if (item.type == 'warehouse') {
-              marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
-              mapMarkers[item.id] = marker;
-            }
-            else if (item.type == 'drone'){
-              marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
-              mapMarkers[item.id] = marker;
-            }
-
-            mapMarkers[item.id].bindPopup(item.id);
+      // each 3 secs, log the orders that are not delivered yet
+      setInterval(function() {
+        console.log('Checking orders not delivered yet:')
+        var list_orders = [];
+        for (var key in mapMarkers) {
+          var marker = mapMarkers[key];
+          if (marker.type != 'order') {
+            continue;
           }
-        });
-
+          if (marker.type == 'order' && marker.status == false) {
+            list_orders.push('Order ' + key + ' not delivered yet');
+          }
+        }
+        if (list_orders.length == 0) {
+          console.log('All orders delivered');
+        } else {
+          console.log(list_orders);
+        }
+      }, 3000);
+        
       var socket = io.connect('/');
       socket.on('update_data', function(data) {
         for (var key in data) {
@@ -158,16 +139,20 @@
           // otherwise, create a new marker, according if it is a warehouse, a order or a drone
           else {
             if (item.type == 'order') {
-              marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
+              marker = L.marker([item.latitude, item.longitude], {icon: orderIcon}).addTo(mymap);
               mapMarkers[item.id] = marker;
+              mapMarkers[item.id].status = false;
+              mapMarkers[item.id].type = 'order';
             } 
             else if (item.type == 'warehouse') {
               marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
               mapMarkers[item.id] = marker;
+              mapMarkers[item.id].type = 'warehouse';
             }
             else if (item.type == 'drone'){
               marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
               mapMarkers[item.id] = marker;
+              mapMarkers[item.id].type = 'drone';
               if(dronesMetrics[item.id] == undefined) {
                 dronesMetrics[item.id] = {};
               }
@@ -181,49 +166,13 @@
 
           // Update order status
           if (item.type == 'order' && item.status == true && item.status != mapMarkers[item.id].status) {
-            mapMarkers[item.id].status = item.status;
             mapMarkers[item.id].setIcon(completedOrderIcon);
+            mapMarkers[item.id].status = item.status;
           }
         }
 
         // Update drones metrics
         averageMetrics();
-
-        /* This is cool but we not using
-        for (var key in dronesMetrics) {
-          var drone = dronesMetrics[key];
-          if (drone.status == 'delivering') {
-            var order = mapMarkers[drone.order_id];
-            var distance = drone.distance;
-            var time = drone.time;
-            var speed = drone.speed;
-            var eta = drone.eta;
-            var distanceToOrder = drone.distance_to_order;
-            var distanceToWarehouse = drone.distance_to_warehouse;
-            var battery = drone.battery;
-            var batteryStatus = drone.battery_status;
-            var batteryColor = 'green';
-            if (batteryStatus == 'low') {
-              batteryColor = 'red';
-            }
-            else if (batteryStatus == 'medium') {
-              batteryColor = 'yellow';
-            }
-            var popupContent = '<b>Drone ' + drone.id + '</b><br>' +
-              'Status: ' + drone.status + '<br>' +
-              'Order: ' + drone.order_id + '<br>' +
-              'Distance: ' + distance + ' km<br>' +
-              'Time: ' + time + ' s<br>' +
-              'Speed: ' + speed + ' km/h<br>' +
-              'ETA: ' + eta + ' s<br>' +
-              'Distance to order: ' + distanceToOrder + ' km<br>' +
-              'Distance to warehouse: ' + distanceToWarehouse + ' km<br>' +
-              'Battery: ' + battery + '%<br>' +
-              'Battery status: <span style="color:' + batteryColor + ';">' + batteryStatus + '</span>';
-            mapMarkers[drone.id].bindPopup(popupContent);
-          }
-        }
-        */
       });
 
     </script>

@@ -98,7 +98,7 @@ class RefuseOrderBehav(CyclicBehaviour):
 # ----------------------------------------------------------------------------------------------
 
 class WarehouseAgent(Agent):
-    def __init__(self, id, jid, password, latitude, longitude, orders) -> None:
+    def __init__(self, id, jid, password, latitude, longitude, orders, socketio) -> None:
         super().__init__(jid, password)
         self.id = id
         self.latitude = latitude
@@ -124,13 +124,37 @@ class WarehouseAgent(Agent):
         self.inventory_size = len(self.inventory)
 
         self.logger = Logger(filename=id)
+        self.socketio = socketio
 
     async def setup(self):
         self.logger.log(f"{self.id} - [SETUP]")
+        self.add_behaviour(EmitSetupBehav())
         self.add_behaviour(HandOutBehav())
         
     def __str__ (self) -> str:
         return "Warehouse {} - at ({}, {}) with ({}/{}) orders remaining"\
             .format(self.id, self.latitude, self.longitude, self.inventory_size, self.initial_inventory_size)
 
+# ----------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------
+
+from spade.behaviour import OneShotBehaviour
+
+# ----------------------------------------------------------------------------------------------
+        
+class EmitSetupBehav(OneShotBehaviour):
+    async def run(self):
+        data = [order.get_order_for_visualization() for order in self.agent.inventory.values()]
+        data.append({
+            'id': self.agent.id,
+            'latitude': self.agent.position['latitude'],
+            'longitude': self.agent.position['longitude'],
+            'type': 'warehouse'
+        })
+        self.agent.socketio.emit(
+            'update_data', 
+            data
+        )
+            
 # ----------------------------------------------------------------------------------------------

@@ -25,7 +25,7 @@ class DroneParameters:
     def __init__(self, id : str, capacity : int, autonomy : float , velocity : float) -> None:
         # ---- Metrics ----
         self.__total_trips : int = 0
-        self.__total_distance : float = 0.0 # Can be converted to time with velocity
+        self.total_distance : float = 0.0 # Can be converted to time with velocity
         self.__min_distance_on_trip : float = float('inf') # Measured in meters
         self.__max_distance_on_trip : float = 0.0 # Measured in meters
         self.__avg_distance_on_trip : float = 0.0 # Measured in meters
@@ -63,12 +63,12 @@ class DroneParameters:
             dest_warehouse (dict): The destination warehouse with its coordinates.
         """
         self.__total_trips += 1
-        self.__total_distance += distance
+        self.total_distance += distance
         self.__min_distance_on_trip = min(self.__min_distance_on_trip, distance)
         self.__max_distance_on_trip = max(self.__max_distance_on_trip, distance)
-        self.__avg_distance_on_trip = self.__total_distance / self.__total_trips
+        self.__avg_distance_on_trip = self.total_distance / self.__total_trips
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
-        self.__energy_consumption = self.__total_distance / self.max_autonomy
+        self.__energy_consumption = self.total_distance / self.max_autonomy
         self.__path.append(dest_warehouse)
         
     def add_order(self, capacity : int, destination : dict) -> None:
@@ -122,7 +122,7 @@ class DroneParameters:
               .format(self.id, 
                         [
                             {"Total Trips": self.__total_trips},
-                            {"Total Distance": round(self.__total_distance,2)},
+                            {"Total Distance": round(self.total_distance,2)},
                             {"Min Distance": round(self.__min_distance_on_trip,2)},
                             {"Max Distance": round(self.__max_distance_on_trip,2)},
                             {"Avg Distance": round(self.__avg_distance_on_trip,2)},
@@ -149,7 +149,7 @@ class DroneParameters:
                     "Metrics":
                     {
                         "Total Trips": self.__total_trips,
-                        "Total Distance": round(self.__total_distance,2),
+                        "Total Distance": round(self.total_distance,2),
                         "Min Distance": round(self.__min_distance_on_trip,2),
                         "Max Distance": round(self.__max_distance_on_trip,2),
                         "Avg Distance": round(self.__avg_distance_on_trip,2),
@@ -308,7 +308,7 @@ class ReturnBehav(PeriodicBehaviour):
 # ----------------------------------------------------------------------------------------------
         
 class DroneAgent(Agent):
-    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}) -> None:
+    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}, socketio = None) -> None:
         super().__init__(jid, password)
         self.total_orders : list[DeliveryOrder] = [] 
         self.curr_orders : list[DeliveryOrder] = []
@@ -328,6 +328,8 @@ class DroneAgent(Agent):
         self.params = DroneParameters(id, capacity, autonomy, velocity)
         
         self.logger = Logger(filename = id)
+        self.socketio = socketio
+        self.orders_to_visualize : list[DeliveryOrder] = []
 
     # ----------------------------------------------------------------------------------------------
     # Warehouse management
@@ -444,6 +446,11 @@ class DroneAgent(Agent):
         self.params.drop_order(order.weight)
         self.curr_orders.remove(order)
         self.curr_order = None
+        
+        # update order status on the total orders list
+        order.update_order_status()
+        self.orders_to_visualize.append(order)
+        
 
     def compute_route(self, orders : list[DeliveryOrder]) -> float:
         """
@@ -510,6 +517,7 @@ class DroneAgent(Agent):
         Agent's setup method. It adds the IdleBehav behaviour.
         """
         print(f"{self.params.id} - [SETUP]")
+        self.add_behaviour(EmitSetupBehav())
         self.add_behaviour(IdleBehav())
 
     def __str__(self) -> str:
@@ -525,3 +533,49 @@ class DroneAgent(Agent):
             
 # ----------------------------------------------------------------------------------------------
     
+# ----------------------------------------------------------------------------------------------
+
+from spade.behaviour import PeriodicBehaviour, OneShotBehaviour
+
+# ----------------------------------------------------------------------------------------------
+
+class EmitPositionBehav(PeriodicBehaviour):
+    async def run(self):
+        
+        data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
+
+        data.append({
+            'id': self.agent.params.id,
+            'latitude': self.agent.position['latitude'],
+            'longitude': self.agent.position['longitude'],
+            'distance': self.agent.params.total_distance,
+            'capacity': round(self.agent.params.curr_capacity * 100.0/self.agent.params.max_capacity,2),
+            'autonomy': round(self.agent.params.curr_autonomy * 100.0/self.agent.params.max_autonomy,2),
+            'orders_delivered': self.agent.params.orders_delivered,
+            'type': 'drone'
+        })        
+        
+        self.agent.socketio.emit(
+            'update_data', 
+            data
+        )
+        
+        self.agent.orders_to_visualize = []
+        
+class EmitSetupBehav(OneShotBehaviour):
+    async def run(self):
+        self.agent.socketio.emit(
+            'update_data', 
+            [
+                {
+                    'id': self.agent.params.id,
+                    'latitude': self.agent.position['latitude'],
+                    'longitude': self.agent.position['longitude'],
+                    'type': 'drone'
+                }
+            ]
+        )
+    async def on_end(self) -> None:
+        self.agent.add_behaviour(EmitPositionBehav(period=1.0))
+            
+# ----------------------------------------------------------------------------------------------
