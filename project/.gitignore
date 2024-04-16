@@ -2,3 +2,4 @@
 venv
 src/__pycache__
 data/global_variables.json
+*.pyc
