@@ -15,7 +15,7 @@ class WebApp:
     def __init__(self) -> None:
         pd.options.mode.chained_assignment = None 
         self.app : Flask = Flask(__name__, template_folder='./visualization/templates')
-        self.socketio = SocketIO(self.app)
+        self.socketio : SocketIO = SocketIO(self.app)
         
         self.debug = False
         self.use_reloader = False

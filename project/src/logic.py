@@ -1,9 +1,10 @@
 from warehouse_agent import WarehouseAgent
 from drone_agent import DroneAgent
+from flask_socketio import SocketIO
 import spade
 
 class DeliveryLogic:
-    def __init__(self, delivery_drones, warehouses):
+    def __init__(self, delivery_drones : list[dict], warehouses : list[dict], socketio : SocketIO) -> None:
         
         # Create warehouse agents
         self.warehouses : list[WarehouseAgent] = [

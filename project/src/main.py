@@ -32,14 +32,14 @@ def main() -> None:
     # Setup web app on a separate thread
     web_app = WebApp()
     
-    server_thread = threading.Thread(target=web_app.run)
+    server_thread = threading.Thread(target=web_app.socketio.run, args=(web_app.app,), kwargs={'port': 8050})
     server_thread.daemon = True
     server_thread.start()
     # Wait for the server to start
     sleep(3)
     
     # Setup delivery logic
-    DeliveryLogic(delivery_drones, warehouses)
+    DeliveryLogic(delivery_drones, warehouses, web_app.socketio)
     
     # Kill the server thread
     exit(0)
