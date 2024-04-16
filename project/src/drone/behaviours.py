@@ -88,7 +88,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
     def time_to_order(self, orders : list[DeliveryOrder]) -> float:
         closest = closest_order(
             self.agent.position["latitude"],
-            self.agent.position["longitude"] 
+            self.agent.position["longitude"], 
             orders
         )
         distance = haversine_distance(self.agent.position, closest.destination_position)
