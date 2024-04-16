@@ -18,11 +18,11 @@ class DroneAgent(Agent):
         self.total_orders : list[DeliveryOrder] = [] 
         self.next_orders : list[DeliveryOrder] = []
         self.next_order : DeliveryOrder = None
+        self.next_warehouse : str = None
         
         self.required_autonomy : float = 0.0
         
         self.warehouse_positions : dict = warehouse_positions    
-        self.next_warehouse_id : dict = None
         self.distance_to_next_warehouse = 0.0
         self.available_order_sets : dict = {}
     
@@ -74,6 +74,15 @@ class DroneAgent(Agent):
             warehouse_id (str): The id of the warehouse to remove.
         """
         self.warehouse_positions.pop(warehouse_id)
+        
+    def get_next_warehouse_position(self) -> tuple:
+        """
+        Method to get the next warehouse position.
+
+        Returns:
+            tuple: The latitude and longitude of the next warehouse.
+        """
+        return self.warehouse_positions[self.next_warehouse]['latitude'], self.warehouse_positions[self.next_warehouse]['longitude']
         
     # ----------------------------------------------------------------------------------------------
 

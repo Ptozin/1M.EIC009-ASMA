@@ -4,7 +4,7 @@ from spade.behaviour import OneShotBehaviour, PeriodicBehaviour, CyclicBehaviour
 from spade.message import Message
 
 from drone.utils import *
-from misc.distance import haversine_distance
+from misc.distance import haversine_distance, next_position
 import json
 
 # ----------------------------------------------------------------------------------------------
@@ -12,6 +12,10 @@ import json
 TIME_MULTIPLIER = 500 # increases the speed per tick to 10km/s, with a base velocity of 20 m/s
 DECIDING = 10
 DISMISSED = 20
+DELIVERING = 30
+RETURNING = 40
+RETURNED = 50
+ERROR = 60
 
 # ----------------------------------------------------------------------------------------------
 
@@ -38,20 +42,26 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 message.to = warehouse + "@localhost"
                 message.set_metadata("performative", "refuse")
                 await self.send(message)
+            self.kill(exit_code=DELIVERING)
         else:
             for warehouse in self.agent.warehouse_positions.keys():
                 message = Message()
                 message.to = warehouse + "@localhost"
                 if warehouse == winner:
+                    self.agent.next_orders += self.agent.available_order_sets[warehouse]
+                    self.agent.next_warehouse = warehouse
                     message.set_metadata("performative", "agree")
                     message.body = self.agent.available_order_sets[winner]
                 else:
                     message.set_metadata("performative", "refuse")
                 await self.send(message)
+            self.kill(exit_code=RETURNING)
             
     async def on_end(self):
-        # TODO: call deliver or returning behaviour, depending on mid-flight decisions
-        pass
+        if self.exit_code == DELIVERING:
+            self.agent.add_behaviour(DeliverBehaviour())
+        elif self.exit_code == RETURNING:
+            self.agent.add_behaviour(ReturnBehaviour())
       
     # ----------------------------------------------------------------------------------------------
       
@@ -150,11 +160,43 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
 
 class ReturnBehaviour(PeriodicBehaviour):
     async def run(self):
-        # TODO: make the drone move to the chosen warehouse, recharge and pack new orders
-        pass
+        if not self.agent.available_warehouses():
+            self.kill(exit_code=ERROR)
+            return 
+        next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
+        self.agent.position = next_position(
+                self.agent.position['latitude'],
+                self.agent.position['longitude'],
+                next_warehouse_lat,
+                next_warehouse_lon,
+                self.agent.params.velocity * TIME_MULTIPLIER
+            )
+        if self.agent.arrived_to_target(next_warehouse_lat, next_warehouse_lon):
+            self.agent.params.curr_autonomy = self.agent.params.max_autonomy
+            self.agent.next_warehouse = None
+            self.kill(exit_code=RETURNED)
+        else:
+            self.agent.logger.log("[RETURNING] {} - Distance to warehouse: {} meters"\
+                .format(self.agent.params.id, 
+                        round(haversine_distance(
+                            self.agent.position['latitude'], 
+                            self.agent.position['longitude'], 
+                            next_warehouse_lat,
+                            next_warehouse_lon
+                        ),2)
+                    )
+                )
     
     async def on_end(self):
-        self.agent.add_behaviour(AvailableBehaviour())
+        if self.exit_code == ERROR:
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No warehouse available to return to. Self Destruction activated.")
+            await self.agent.stop()
+        elif self.exit_code == RETURNED:
+            self.agent.logger.log(f"[RETURNED] {self.agent.params.id}")
+            self.agent.add_behaviour(AvailableBehaviour())
+        else:
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Unexpected error")
+            await self.agent.stop()
 
 # ----------------------------------------------------------------------------------------------
 
