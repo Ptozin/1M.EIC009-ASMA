@@ -14,7 +14,8 @@ class DeliveryLogic:
                 warehouse["password"],
                 warehouse["latitude"],
                 warehouse["longitude"],
-                orders
+                orders,
+                socketio
             ) for warehouse, orders in warehouses
         ]
         
@@ -37,7 +38,8 @@ class DeliveryLogic:
                 drone["capacity"],
                 drone["autonomy"],
                 drone["velocity"],
-                warehouse_positions.copy() # Need to copy the dictionary to avoid reference issues
+                warehouse_positions.copy(), # Need to copy the dictionary to avoid reference issues
+                socketio
             ) for drone in delivery_drones
         ]
 
