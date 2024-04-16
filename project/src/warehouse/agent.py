@@ -5,6 +5,7 @@ from spade.agent import Agent
 from src.order import DeliveryOrder
 from misc.log import Logger
 from behaviours.idle import IdleBehaviour
+from behaviours.visualization import EmitSetupBehav
 from flask_socketio import SocketIO
             
 # ----------------------------------------------------------------------------------------------
@@ -19,7 +20,7 @@ class WarehouseAgent(Agent):
             "latitude": latitude,
             "longitude": longitude
         } 
-        self.inventory = {}
+        self.inventory : dict[DeliveryOrder]= {}
         def create_order(order):
             self.inventory[order["id"]] = DeliveryOrder(
                 order["id"],
@@ -39,21 +40,7 @@ class WarehouseAgent(Agent):
 
     async def setup(self):
         self.logger.log(f"{self.id} - [SETUP]")
+        self.add_behaviour(EmitSetupBehav())
         self.add_behaviour(IdleBehaviour())
-
-    # ------------------------------------------------------------------------------------------
-
-    def emit_to_socketio(self) -> None:
-        self.socketio.emit(
-            'update_data', 
-            [
-                {
-                    'id': self.params.id,
-                    'latitude': self.position['latitude'],
-                    'longitude': self.position['longitude'],
-                    'type': 'warehouse'
-                }
-            ]
-        )
 
 # ----------------------------------------------------------------------------------------------

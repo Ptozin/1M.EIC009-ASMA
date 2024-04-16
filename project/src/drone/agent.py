@@ -100,22 +100,4 @@ class DroneAgent(Agent):
         self.curr_orders.remove(order)
         self.curr_order = None
 
-    # ----------------------------------------------------------------------------------------------
-    
-    def emit_to_socketio(self) -> None:
-        self.socketio.emit(
-            'update_data', 
-            [
-                {
-                    'id': self.params.id,
-                    'latitude': self.position['latitude'],
-                    'longitude': self.position['longitude'],
-                    'type': 'drone'
-                },
-                # ----
-                # Needs to also include the orders with the status
-                # ----
-            ]
-        )
-
 # ----------------------------------------------------------------------------------------------
