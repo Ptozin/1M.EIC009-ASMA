@@ -1,8 +1,24 @@
 # ----------------------------------------------------------------------------------------------
 
 from src.order import DeliveryOrder
+from misc.distance import haversine_distance
 
 # ----------------------------------------------------------------------------------------------
+
+def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> DeliveryOrder:
+    min_dist = float('inf')
+    closest = None
+    for order in orders:
+        dist = haversine_distance(
+            latitude,
+            longitude,
+            order.destination_position['latitude'],
+            order.destination_position['longitude']
+        )
+        if dist < min_dist:
+            min_dist = dist
+            closest = order
+    return closest
 
 def generate_path(orders : list[DeliveryOrder]) -> list[str]:
     # TODO: implement best path algorithm

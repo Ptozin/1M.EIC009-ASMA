@@ -16,8 +16,8 @@ class DroneAgent(Agent):
     def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}, socketio : SocketIO = None) -> None:
         super().__init__(jid, password)
         self.total_orders : list[DeliveryOrder] = [] 
-        self.curr_orders : list[DeliveryOrder] = []
-        self.curr_order : DeliveryOrder = None
+        self.next_orders : list[DeliveryOrder] = []
+        self.next_order : DeliveryOrder = None
         
         self.required_autonomy : float = 0.0
         
@@ -84,7 +84,7 @@ class DroneAgent(Agent):
         Args:
             order (DeliveryOrder): The order to add.
         """
-        self.curr_orders.append(order)
+        self.next_orders.append(order)
         self.total_orders.append(order)
         self.params.add_order(order.weight, order.get_order_destination_position())
         
@@ -97,7 +97,7 @@ class DroneAgent(Agent):
             order (DeliveryOrder): The order to add.
         """
         self.params.drop_order(order.weight)
-        self.curr_orders.remove(order)
-        self.curr_order = None
+        self.next_orders.remove(order)
+        self.next_order = None
 
 # ----------------------------------------------------------------------------------------------

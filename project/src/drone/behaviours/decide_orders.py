@@ -3,8 +3,9 @@
 from spade.behaviour import OneShotBehaviour
 from spade.message import Message
 
-from ..agent import DroneAgent
+from src.drone.agent import DroneAgent
 from utils import *
+from misc.distance import haversine_distance
 
 # ----------------------------------------------------------------------------------------------
 
@@ -38,21 +39,40 @@ class DecideOrdersBehaviour(OneShotBehaviour):
     # ----------------------------------------------------------------------------------------------
       
     def best_order_decision(self) -> str:
-        orders = self.agent.curr_orders
+        orders = self.agent.next_orders
         path = generate_path(orders)
-        travel_time = calculate_travel_time(path, self.agent.params.velocity)
+        travel_time = self.time_to_order(orders) + calculate_travel_time(path, self.agent.params.velocity)
         capacity_level = calculate_capacity_level(orders, self.agent.params.max_capacity)
         utility = utility(travel_time, capacity_level)
         winner = "drone"
         for warehouse, orders in self.agent.available_order_sets.items():
-            orders += self.agent.curr_orders
+            orders = self.agent.next_orders + orders
             path = generate_path(orders)
-            travel_time = calculate_travel_time(path, self.agent.params.velocity)
+            travel_time = self.time_to_warehouse(warehouse) + self.time_warehouse_to_order(warehouse, orders) + calculate_travel_time(path, self.agent.params.velocity)
+            orders += self.agent.next_orders
             capacity_level = calculate_capacity_level(orders, self.agent.params.max_capacity)
             new_utility = utility(travel_time, capacity_level)
             if new_utility > utility:
                 winner = warehouse
                 utility = new_utility
         return winner
+    
+    def time_to_order(self, orders : list[DeliveryOrder]) -> float:
+        closest = closest_order(self.agent.position, orders)
+        distance = haversine_distance(self.agent.position, closest.destination_position)
+        return distance / self.agent.params.velocity
+        
+    def time_to_warehouse(self, warehouse : str) -> float:
+        distance = haversine_distance(self.agent.position, self.agent.warehouse_positions[warehouse])
+        return distance / self.agent.params.velocity
+    
+    def time_warehouse_to_order(self, warehouse : str, orders : list[DeliveryOrder]) -> float:
+        closest = closest_order(
+            self.agent.warehouse_positions[warehouse]['latitude'], 
+            self.agent.warehouse_positions[warehouse]['longitude'], 
+            orders
+        )
+        distance = haversine_distance(self.agent.warehouse_positions[warehouse], closest.destination_position)
+        return distance / self.agent.params.velocity
 
 # ----------------------------------------------------------------------------------------------
