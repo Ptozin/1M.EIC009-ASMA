@@ -1,14 +1,10 @@
 # ----------------------------------------------------------------------------------------------
 
-from spade.behaviour import PeriodicBehaviour, OneShotBehaviour
-
-from ..agent import WarehouseAgent
+from spade.behaviour import OneShotBehaviour
 
 # ----------------------------------------------------------------------------------------------
         
 class EmitSetupBehav(OneShotBehaviour):
-    async def on_start(self):
-        self.agent : WarehouseAgent = self.agent
     async def run(self):
         self.agent.socketio.emit(
             'update_data', 

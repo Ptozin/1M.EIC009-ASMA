@@ -3,15 +3,11 @@
 from spade.behaviour import OneShotBehaviour
 from spade.message import Message
 
-from ..agent import DroneAgent
-from receive_orders import ReceiveOrdersBehaviour
+from drone.behaviours.receive_orders import ReceiveOrdersBehaviour
 
 # ----------------------------------------------------------------------------------------------
 
 class AvailableBehaviour(OneShotBehaviour):
-    async def on_start(self):
-        self.agent : DroneAgent = self.agent
-    
     async def run(self):
         for warehouse in self.agent.warehouse_positions.keys():
             message = Message()
