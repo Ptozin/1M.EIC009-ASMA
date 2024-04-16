@@ -24,7 +24,7 @@ def generate_path(orders : list[DeliveryOrder]) -> list[str]:
     # TODO: implement best path algorithm
     return []
 
-def calculate_travel_time(path : list[str], velocity) -> float:
+def calculate_travel_time(path : list[str], velocity : float) -> float:
     # TODO: calculate travel time based on path and velocity
     return 0.0
 

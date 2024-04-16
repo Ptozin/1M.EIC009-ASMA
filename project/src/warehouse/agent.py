@@ -10,12 +10,12 @@ from flask_socketio import SocketIO
 # ----------------------------------------------------------------------------------------------
 
 class WarehouseAgent(Agent):
-    def __init__(self, id, jid, password, latitude, longitude, orders, socketio : SocketIO) -> None:
+    def __init__(self, id : str, jid : str, password : str, latitude : float, longitude : float, orders : dict , socketio : SocketIO) -> None:
         super().__init__(jid, password)
-        self.id = id
-        self.latitude = latitude
-        self.longitude = longitude
-        self.position = {
+        self.id : str = id
+        self.latitude : float = latitude
+        self.longitude : str = longitude
+        self.position : dict = {
             "latitude": latitude,
             "longitude": longitude
         } 
@@ -32,12 +32,12 @@ class WarehouseAgent(Agent):
         for order in orders:
             create_order(order)
         
-        self.curr_drone = None
+        self.curr_drone : str | None = None
 
         self.logger = Logger(filename=id)
         self.socketio = socketio
 
-    async def setup(self):
+    async def setup(self) -> None:
         self.logger.log(f"{self.id} - [SETUP]")
         self.add_behaviour(EmitSetupBehav())
         self.add_behaviour(IdleBehaviour())
