@@ -2,34 +2,32 @@
 
 from spade.behaviour import PeriodicBehaviour, OneShotBehaviour
 
-from ..agent import DroneAgent
-
 # ----------------------------------------------------------------------------------------------
 
 class EmitPositionBehav(PeriodicBehaviour):
-    async def on_start(self):
-        self.agent : DroneAgent = self.agent
-    
     async def run(self):
-        # TODO: This function needs to be created in the agent
+        
+        data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
+
+        data.append({
+            'id': self.agent.params.id,
+            'latitude': self.agent.position['latitude'],
+            'longitude': self.agent.position['longitude'],
+            'distance': self.agent.params.total_distance,
+            'capacity': round(self.agent.params.curr_capacity * 100.0/self.agent.params.max_capacity,2),
+            'autonomy': round(self.agent.params.curr_autonomy * 100.0/self.agent.params.max_autonomy,2),
+            'orders_delivered': self.agent.params.orders_delivered,
+            'type': 'drone'
+        })        
+        
         self.agent.socketio.emit(
             'update_data', 
-            [
-                {
-                    'id': self.agent.params.id,
-                    'latitude': self.agent.position['latitude'],
-                    'longitude': self.agent.position['longitude'],
-                    'type': 'drone'
-                },
-                # ----
-                # Needs to also include the orders with the status
-                # ----
-            ]
+            data
         )
         
+        self.agent.orders_to_visualize = []
+        
 class EmitSetupBehav(OneShotBehaviour):
-    async def on_start(self):
-        self.agent : DroneAgent = self.agent
     async def run(self):
         self.agent.socketio.emit(
             'update_data', 
