@@ -3,7 +3,8 @@ import json
 
 STATUS = {
     "FREE": False,
-    "DELIVERED": True
+    "DELIVERED": True,
+    "TAKEN": True
 }
 
 class DeliveryOrder:
@@ -40,7 +41,11 @@ class DeliveryOrder:
         
     def update_order_status(self) -> None:
         """
-        Update the order status to DELIVERED.
+        Update the order status.
+        Used in different ways for the warehouse and the drone.
+        
+        Updates to DELIVERED when the order is delivered by the drone, on the drone side.
+        Updates to TAKEN when the order is taken by the drone, on the warehouse side.
         """
         self.order_status = STATUS["DELIVERED"]
     

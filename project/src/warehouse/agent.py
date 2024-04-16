@@ -4,8 +4,9 @@ from spade.agent import Agent
 
 from order import DeliveryOrder
 from misc.log import Logger
-from warehouse.behaviours import IdleBehaviour, EmitSetupBehav
+from warehouse.behaviours import IdleBehaviour, EmitSetupBehav, SetupOrdersMatrixBehav
 from flask_socketio import SocketIO
+from utils import OrdersMatrix
             
 # ----------------------------------------------------------------------------------------------
 
@@ -20,7 +21,9 @@ class WarehouseAgent(Agent):
             "longitude": longitude
         } 
         self.inventory : dict[DeliveryOrder]= {}
-        def create_order(order):
+        self.orders_to_be_picked : list[str] = []
+
+        for order in orders:
             self.inventory[order["id"]] = DeliveryOrder(
                 order["id"],
                 self.position["latitude"],
@@ -29,17 +32,18 @@ class WarehouseAgent(Agent):
                 order["longitude"],
                 order["weight"]
             )
-        for order in orders:
-            create_order(order)
         
         self.curr_drone : str | None = None
 
         self.logger = Logger(filename=id)
         self.socketio = socketio
+        
+        self.orders_matrix : OrdersMatrix = None
 
     async def setup(self) -> None:
         self.logger.log(f"{self.id} - [SETUP]")
         self.add_behaviour(EmitSetupBehav())
+        self.add_behaviour(SetupOrdersMatrixBehav())
         self.add_behaviour(IdleBehaviour())
 
 # ----------------------------------------------------------------------------------------------

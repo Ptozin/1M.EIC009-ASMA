@@ -28,13 +28,11 @@ def haversine_distance(lat1 : float , lon1 : float, lat2 : float, lon2 : float, 
 
 def next_position(curr_lat, curr_lon, target_lat, target_lon, velocity):
     distance = haversine_distance(curr_lat, curr_lon, target_lat, target_lon)
-    
     if distance == 0.0:
         return {
             "latitude": target_lat,
             "longitude": target_lon
         }
-    
     fraction = min(velocity / distance, 1.0)
     new_lat = curr_lat + fraction * (target_lat - curr_lat)
     new_lon = curr_lon + fraction * (target_lon - curr_lon)

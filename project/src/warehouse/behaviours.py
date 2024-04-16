@@ -7,21 +7,15 @@ from warehouse.utils import *
 
 # ----------------------------------------------------------------------------------------------
 
-class DismissBehaviour(CyclicBehaviour):
-    async def on_start(self):
-        self.counter = 0
-        self.limit = 3
-    
+class DismissBehaviour(CyclicBehaviour):    
     async def run(self):
-        self.counter += 1
+        # It will be self-terminated when all drones finish their tasks
+        
         message = await self.receive(timeout=5)
         if message is None:
-            self.agent.logger.log(f"{self.agent.id} - [REFUSING] - Waiting for available drones... try {self.counter}/{self.limit}")
-            if self.counter >= self.limit:
-                self.kill()
+            self.agent.logger.log(f"{self.agent.id} - [REFUSING] - Waiting for drones to refuse...")
         else:
-            self.counter = 0 
-            self.agent.logger.log(f"{self.agent.id} - [REFUSING] - [MESSAGE] {message.body}")
+            self.agent.logger.log(f"{self.agent.id} - [REFUSING] - [MESSAGE] {str(message.sender)}")
             message = Message(to=str(message.sender))
             message.set_metadata("performative", "refuse")
             await self.send(message)
@@ -29,38 +23,76 @@ class DismissBehaviour(CyclicBehaviour):
     async def on_end(self):
         self.agent.logger.log(f"{self.agent.id} - [DISMISSING] No more orders to deliver & drones to attend to.")
         await self.agent.stop()
-            
+          
 # ----------------------------------------------------------------------------------------------
 
-class DroneOrdersBehaviour(OneShotBehaviour):
+class HandleOrderPickupBehav(CyclicBehaviour):
+    async def run(self):
+        # TODO: DO NOT AWAIT FOR MESSAGES, USE IDLE BEHAVIOUR AND PROCESS MESSAGE HERE
+        message = await self.receive(timeout=5)
+        if message is None:
+            self.agent.logger.log("[PICKUP] Waiting for drones to pickup {} order(s)... - {}"\
+                .format(str(len(self.orders_to_be_picked)),str(self.agent)))
+        else:
+            orders = json.loads(message.body)
+            for order in orders:
+                # Assuming that there is never a race condition
+                self.orders_to_be_picked.remove(order["id"])
+                
+            self.agent.logger.log("[PICKUP] {} Orders picked up by drone - {}"\
+                .format(str(len(orders)),str(self.agent)))
+            
+            answer = Message()
+            answer.to = str(message.sender)
+            answer.metadata = {"performative": "accept"}
+            
+            await self.send(answer)
+            
+
+# ----------------------------------------------------------------------------------------------
+
+class HandleSuggestionsBehav(OneShotBehaviour):
     async def run(self):
         message = await self.receive(timeout=5)
         if message is None:
-            pass # TODO: deal with timeout (drone did not respond with orders chosen)
+            # Go back to idle behaviour
+            self.kill()
         else:
             if message.metadata["performative"] == "refuse":
                 self.kill()
             elif message.metadata["performative"] == "agree":
                 drone_data = json.loads(message.body)
+                
+                orders_id = []
                 for order in drone_data["orders"]:
-                    continue # TODO: update order status (delivering)
+                    self.agent.inventory[order["id"]].update_order_status()
+                    self.orders_to_be_picked.append(order["id"])
+                    orders_id.append(order["id"])
+                self.agent.matrix.remove_order(orders_id = orders_id)
+            
             
     async def on_end(self):
-        # TODO: check if there are more orders to deliver - if not, call dismiss behaviour
-        self.agent.add_behaviour(IdleBehaviour())
+        # Dismiss if there are no more orders available
+        orders_left = sum([1 for order in self.agent.inventory.values() if order.order_status == False])
+        if orders_left == 0:
+            self.agent.add_behaviour(DismissBehaviour())
+        else:
+            self.agent.add_behaviour(IdleBehaviour())
 
 # ----------------------------------------------------------------------------------------------
 
-class HandOutBehaviour(OneShotBehaviour):
+class SuggestOrdersBehav(OneShotBehaviour):
     async def run(self):
         message = Message()
         message.to = self.agent.curr_drone["id"] + "@localhost"
-        message.body = select_orders(self.agent.inventory)
+        message.body = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
+                                                              self.agent.position['longitude'], 
+                                                              self.agent.curr_drone["capacity"])
         message.set_metadata("performative", "inform")
         await self.send(message)
         
     async def on_end(self):
-        self.agent.add_behaviour(DroneOrdersBehaviour())
+        self.agent.add_behaviour(HandleSuggestionsBehav())
         
 # ----------------------------------------------------------------------------------------------
 
@@ -74,7 +106,7 @@ class IdleBehaviour(CyclicBehaviour):
             self.kill()
             
     async def on_end(self):
-        self.agent.add_behaviour(HandOutBehaviour())
+        self.agent.add_behaviour(SuggestOrdersBehav())
         
 # ----------------------------------------------------------------------------------------------
 
@@ -92,4 +124,10 @@ class EmitSetupBehav(OneShotBehaviour):
             data
         )
             
+# ----------------------------------------------------------------------------------------------
+
+class SetupOrdersMatrixBehav(OneShotBehaviour):
+    async def run(self):
+        self.agent.orders_matrix = OrdersMatrix(self.agent.inventory, divisions=5, capacity_multiplier=3)
+
 # ----------------------------------------------------------------------------------------------
