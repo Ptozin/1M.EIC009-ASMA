@@ -23,9 +23,9 @@ class DismissBehaviour(CyclicBehaviour):
         else:
             self.counter = 0 
             self.agent.logger.log(f"{self.agent.id} - [REFUSING] - [MESSAGE] {message.body}")
-            msg = Message(to=str(message.sender))
-            msg.set_metadata("performative", "refuse")
-            await self.send(msg)
+            message = Message(to=str(message.sender))
+            message.set_metadata("performative", "refuse")
+            await self.send(message)
     
     async def on_end(self):
         self.agent.logger.log(f"{self.agent.id} - [DISMISSING] No more orders to deliver & drones to attend to.")

@@ -7,11 +7,13 @@ from src.order import DeliveryOrder
 from parameters import DroneParameters
 from misc.log import Logger
 from behaviours.available import AvailableBehaviour
+from utils import *
+from flask_socketio import SocketIO
 
 # ----------------------------------------------------------------------------------------------
 
 class DroneAgent(Agent):
-    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}) -> None:
+    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}, socketio : SocketIO = None) -> None:
         super().__init__(jid, password)
         self.total_orders : list[DeliveryOrder] = [] 
         self.curr_orders : list[DeliveryOrder] = []
@@ -22,7 +24,7 @@ class DroneAgent(Agent):
         self.warehouse_positions : dict = warehouse_positions    
         self.next_warehouse_id : dict = None
         self.distance_to_next_warehouse = 0.0
-        self.final_order_choices : dict = {}
+        self.available_order_sets : dict = {}
     
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
@@ -32,6 +34,7 @@ class DroneAgent(Agent):
         self.params = DroneParameters(id, capacity, autonomy, velocity)
         
         self.logger = Logger(filename = id)
+        self.socketio = socketio
         
     async def setup(self) -> None:
         """
@@ -51,7 +54,7 @@ class DroneAgent(Agent):
             "velocity": self.params.velocity,
         })     
         
-# ----------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------
 
     def available_warehouses(self) -> bool:
         """
@@ -71,4 +74,48 @@ class DroneAgent(Agent):
         """
         self.warehouse_positions.pop(warehouse_id)
         
+    # ----------------------------------------------------------------------------------------------
+
+    def add_order(self, order : DeliveryOrder) -> None:
+        """
+        Method to add an order to the drone's current orders.
+        Updates the current capacity and the current orders list.
+
+        Args:
+            order (DeliveryOrder): The order to add.
+        """
+        self.curr_orders.append(order)
+        self.total_orders.append(order)
+        self.params.add_order(order.weight, order.get_order_destination_position())
+        
+    def drop_order(self, order : DeliveryOrder) -> None:
+        """
+        Method to remove an order from the drone's current orders.
+        Updates the current capacity and empties the current order field
+
+        Args:
+            order (DeliveryOrder): The order to add.
+        """
+        self.params.drop_order(order.weight)
+        self.curr_orders.remove(order)
+        self.curr_order = None
+
+    # ----------------------------------------------------------------------------------------------
+    
+    def emit_to_socketio(self) -> None:
+        self.socketio.emit(
+            'update_data', 
+            [
+                {
+                    'id': self.params.id,
+                    'latitude': self.position['latitude'],
+                    'longitude': self.position['longitude'],
+                    'type': 'drone'
+                },
+                # ----
+                # Needs to also include the orders with the status
+                # ----
+            ]
+        )
+
 # ----------------------------------------------------------------------------------------------

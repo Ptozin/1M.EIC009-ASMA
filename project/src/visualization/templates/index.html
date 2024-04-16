@@ -10,6 +10,7 @@
       integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg=="
       crossorigin=""></script>
     <!-- END LEAFLET -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <title>ASMA Project 1</title>
   </head>
   <body>
@@ -24,6 +25,8 @@
       }).addTo(mymap);
 
       mapMarkers = {};
+
+      var TIME_INTERVAL = 3000;
 
       var orderIcon = new L.Icon({
         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
@@ -61,7 +64,7 @@
         shadowSize: [40, 40]
       });
 
-      // get initial data through /get_data
+      // get initial data through /get_data TODO: THIS WILL BE DEPRECATED SOON
       fetch('/get_data')
         .then(response => response.json())
         .then(data => {
@@ -84,41 +87,39 @@
           }
         });
 
-      setInterval(function() {
-        fetch('/updated_data')
-          .then(response => response.json())
-          .then(data => {
-            for (var key in data) {
-              item = data[key];
-              // if marker exists, update its position
-              if (mapMarkers[item.id]) {
-                mapMarkers[item.id].setLatLng([item.latitude, item.longitude]);
-              }
-              // otherwise, create a new marker, according if it is a warehouse, a order or a drone
-              else {
-                if (item.type == 'order') {
-                  marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
-                  mapMarkers[item.id] = marker;
-                } 
-                else if (item.type == 'warehouse') {
-                  marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
-                  mapMarkers[item.id] = marker;
-                }
-                else {
-                  marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
-                  mapMarkers[item.id] = marker;
-                }
-                mapMarkers[item.id].bindPopup(item.id);
-              }
-
-              // Update order status
-              if (item.type == 'order' && item.status == true && item.status != mapMarkers[item.id].status) {
-                mapMarkers[item.id].status = item.status;
-                mapMarkers[item.id].setIcon(completedOrderIcon);
-              }
+      var socket = io.connect('/');
+      socket.on('update_data', function(data) {
+        console.log('Received data: ')
+        for (var key in data) {
+          item = data[key];
+          // if marker exists, update its position
+          if (mapMarkers[item.id]) {
+            mapMarkers[item.id].setLatLng([item.latitude, item.longitude]);
+          }
+          // otherwise, create a new marker, according if it is a warehouse, a order or a drone
+          else {
+            if (item.type == 'order') {
+              marker = L.marker([item.latitude, item.longitude], {icon: orderIcon, status: false}).addTo(mymap);
+              mapMarkers[item.id] = marker;
+            } 
+            else if (item.type == 'warehouse') {
+              marker = L.marker([item.latitude, item.longitude], {icon: warehouseIcon}).addTo(mymap);
+              mapMarkers[item.id] = marker;
             }
-          });
-      }, 3000);
+            else {
+              marker = L.marker([item.latitude, item.longitude], {icon: droneIcon}).addTo(mymap);
+              mapMarkers[item.id] = marker;
+            }
+            mapMarkers[item.id].bindPopup(item.id);
+          }
+
+          // Update order status
+          if (item.type == 'order' && item.status == true && item.status != mapMarkers[item.id].status) {
+            mapMarkers[item.id].status = item.status;
+            mapMarkers[item.id].setIcon(completedOrderIcon);
+          }
+        }
+      });
 
     </script>
     <!-- END LEAFLET -->

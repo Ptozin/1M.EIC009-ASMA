@@ -17,9 +17,12 @@ class DroneOrdersBehaviour(OneShotBehaviour):
         if message is None:
             pass # TODO: deal with timeout (drone did not respond with orders chosen)
         else:
-            drone_data = json.loads(message.body)
-            for order in drone_data["orders"]:
-                pass # TODO: update order status (delivering)
+            if message.metadata["performative"] == "refuse":
+                self.kill()
+            elif message.metadata["performative"] == "agree":
+                drone_data = json.loads(message.body)
+                for order in drone_data["orders"]:
+                    continue # TODO: update order status (delivering)
             
     async def on_end(self):
         # TODO: check if there are more orders to deliver - if not, call dismiss behaviour

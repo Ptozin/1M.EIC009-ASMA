@@ -6,6 +6,7 @@ from spade.behaviour import CyclicBehaviour
 from ..agent import DroneAgent
 from src.order import DeliveryOrder
 from decide_orders import DecideOrdersBehaviour
+from utils import best_available_orders
 
 # ----------------------------------------------------------------------------------------------
 
@@ -19,10 +20,10 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
         self.agent : DroneAgent = self.agent
         self.counter = 0
         self.limit = 3
-        self.agent.final_order_choices = {}
+        self.agent.available_order_sets = {}
     
     async def run(self):
-        if len(self.final_order_choices) == len(self.agent.warehouse_positions):
+        if len(self.agent.available_order_sets) == len(self.agent.warehouse_positions):
             self.kill(exit_code=DECIDING)
         
         message = await self.receive(timeout=5)
@@ -39,8 +40,8 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
                     order = json.loads(order)
                     orders.append(DeliveryOrder(**order))
                     
-                order_choices = self.agent.best_order_set(orders)
-                self.agent.final_order_choices[message.sender.split("@")[0]] = order_choices
+                order_choices = best_available_orders(orders, self.agent.params.curr_capacity)
+                self.agent.available_order_sets[message.sender.split("@")[0]] = order_choices
                 
             elif message.metadata["performative"] == "refuse":
                 self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {message.sender}")
@@ -50,6 +51,11 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
                     self.kill(exit_code=DISMISSED)
             
     async def on_end(self):
-        self.agent.add_behaviour(DecideOrdersBehaviour())
+        if self.exit_code == DECIDING:
+            self.agent.add_behaviour(DecideOrdersBehaviour())
+        elif self.exit_code == DISMISSED:
+            self.agent.logger.log(self.agent.params.metrics())
+            self.agent.params.store_results()
+            await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
