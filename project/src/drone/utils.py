@@ -1,7 +1,14 @@
 # ----------------------------------------------------------------------------------------------
 
+from itertools import combinations
+
 from order import DeliveryOrder
 from misc.distance import haversine_distance
+
+# ---------------------------------------------------------------------------------------------
+
+def arrived_to_target(position, target_lat : float, target_lon : float) -> bool:
+    return position['latitude'] == target_lat and position['longitude'] == target_lon
 
 # ---------------------------------------------------------------------------------------------
 
@@ -19,6 +26,8 @@ def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> Delivery
             min_dist = dist
             closest = order
     return closest
+
+# ---------------------------------------------------------------------------------------------
 
 def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> list[DeliveryOrder]:
     if not orders:
@@ -51,6 +60,8 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
             break 
     return path
 
+# ---------------------------------------------------------------------------------------------
+
 def calculate_travel_time(path : list[DeliveryOrder], velocity : float) -> float:
     if len(path) < 2:
         return 0.0
@@ -68,16 +79,20 @@ def calculate_travel_time(path : list[DeliveryOrder], velocity : float) -> float
         total_time += travel_time
     return total_time
 
+# ---------------------------------------------------------------------------------------------
+
 def calculate_capacity_level(orders: list[DeliveryOrder], max_capacity: int) -> float:
     total_weight = sum(order.weight for order in orders)
     capacity_level = total_weight / max_capacity
     return min(capacity_level, 1.0)
 
+# ---------------------------------------------------------------------------------------------
+
 def utility(travel_time : float, capacity_level : float) -> float:
     time_k = 0.1
     capacity_k = 2.0
     if travel_time <= 0:
-        return -float('inf')
+        return float('-inf')
     # decreases with increasing travel time, sharply penalizes near-zero travel time
     travel_utility = - time_k * (1 / travel_time + travel_time)
     # maximize at capacity_level == 1, penalize deviation from 1
@@ -86,17 +101,33 @@ def utility(travel_time : float, capacity_level : float) -> float:
     autonomy_utility = 0.0
     return travel_utility + capacity_utility + autonomy_utility
 
+# ---------------------------------------------------------------------------------------------
+
 def combine_orders(orders : list[DeliveryOrder], capacity : int) -> list[list[DeliveryOrder]]:
-    # TODO: generate sets of orders that can be delivered together taking autonomy and capacity into account
-    pass
+    all_combinations = []
+    for r in range(1, len(orders) + 1):
+        all_combinations.extend(combinations(orders, r))
+    valid_combinations = []
+    for combo in all_combinations:
+        if sum(order.weight for order in combo) <= capacity:
+            valid_combinations.append(list(combo))
+    return valid_combinations
 
-def best_available_orders(order_sets : list[list[DeliveryOrder]], capacity : int) -> list[DeliveryOrder]:
-    # TODO: calculate utility for each set and return the best one
-    return []
+# ---------------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------------
-
-def arrived_to_target(position, target_lat : float, target_lon : float) -> bool:
-    return position['latitude'] == target_lat and position['longitude'] == target_lon
+def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, velocity: float) -> list[DeliveryOrder]:
+    best_set = None
+    best_utility = float('-inf')
+    order_sets = combine_orders(orders, capacity)
+    for order_set in order_sets:
+        first_order = closest_order(latitude, longitude, order_set)
+        path = generate_path(order_set, first_order)
+        travel_time = calculate_travel_time(path, velocity)
+        capacity_level = calculate_capacity_level(order_set, capacity)
+        set_utility = utility(travel_time, capacity_level)
+        if set_utility > best_utility:
+            best_set = order_set
+            best_utility = set_utility
+    return best_set
 
 # ----------------------------------------------------------------------------------------------

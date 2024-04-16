@@ -178,7 +178,13 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
                     order = json.loads(order)
                     orders.append(DeliveryOrder(**order))
                     
-                order_choices = best_available_orders(orders, self.agent.params.curr_capacity)
+                order_choices = best_available_orders(
+                    orders, 
+                    self.agent.position["latitude"], 
+                    self.agent.position["longitude"], 
+                    self.agent.params.max_capacity, 
+                    self.agent.params.velocity
+                )
                 self.agent.available_order_sets[message.sender.split("@")[0]] = order_choices
                 
             elif message.metadata["performative"] == "refuse":
