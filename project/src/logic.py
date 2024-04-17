@@ -2,6 +2,7 @@ from warehouse.agent import WarehouseAgent
 from drone.agent import DroneAgent
 from flask_socketio import SocketIO
 import spade
+from asyncio import sleep
 
 class DeliveryLogic:
     def __init__(self, delivery_drones : list[dict], warehouses : list[dict], socketio : SocketIO) -> None:
@@ -49,6 +50,8 @@ class DeliveryLogic:
     async def start_logic(self):
         for warehouse in self.warehouses:
             await warehouse.start()
+            
+        await sleep(2) # Wait for the warehouses to be ready
         
         for drone in self.delivery_drones:
             await drone.start()

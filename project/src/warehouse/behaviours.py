@@ -26,9 +26,6 @@ class SetupOrdersMatrixBehaviour(OneShotBehaviour):
                 capacity_multiplier=3,
                 warehouse_position=self.agent.position
             )
-    
-    async def on_end(self):
-        self.agent.add_behaviour(IdleBehaviour())
 
 class EmitSetupBehaviour(OneShotBehaviour):
     async def run(self):
@@ -54,17 +51,21 @@ class IdleBehaviour(CyclicBehaviour):
         self.message = None
         message = await self.receive(timeout=5)
         if message is None:
-            self.agent.logger.log("[HANDOUT] Waiting for available drones... - {}".format(str(self.agent)))
+            self.agent.logger.log("[IDLE] Waiting for available drones... - {}".format(str(self.agent)))
         else:
             self.message = message
+            self.agent.logger.log("[IDLE] - [MESSAGE] - {} - from {} with metadata :{}".format(str(self.agent), str(message.sender), str(message.metadata)))
             self.kill(exit_code=message.metadata["next_behaviour"])
             
     async def on_end(self):
         if self.exit_code == SUGGEST_ORDER:
+            self.agent.logger.log("[IDLE] - [SUGGEST] - Suggesting orders to drone - {}".format(str(self.agent)))
             self.agent.add_behaviour(SuggestOrdersBehaviour(self.message))
         elif self.exit_code == ORDER_PICKUP:
+            self.agent.logger.log("[IDLE] - [PICKUP] - Picking up orders - {}".format(str(self.agent)))
             self.agent.add_behaviour(OrdersPickupBehaviour(self.message))
         elif self.exit_code == RECHARGE_DRONE:
+            self.agent.logger.log("[IDLE] - [RECHARGE] - Recharging drone - {}".format(str(self.agent)))
             self.agent.add_behaviour(RechargeDroneBehaviour(self.message))
         else:
             self.agent.logger.log("[IDLE] - [ERROR] - Invalid exit code. {}".format(str(self.agent)))
@@ -89,35 +90,45 @@ class SuggestOrdersBehaviour(OneShotBehaviour):
         message.body = json.dumps([order.__repr__() for order in orders])
         
         message.set_metadata("performative", "propose")
+        
+        self.agent.logger.log("[SUGGEST] - {} orders suggested to drone - {}".format(str(len(orders)), str(self.agent)))
 
         await self.send(message)
+        self.response = await self.receive(timeout=5)
+                
         self.kill(exit_code=HANDLE_SUGGESTION)
         
     async def on_end(self):
-        self.agent.add_behaviour(HandleSuggestionsBehaviour())
+        self.agent.add_behaviour(HandleSuggestionsBehaviour(self.response))
         
 # ----------------------------------------------------------------------------------------------
 
 class HandleSuggestionsBehaviour(OneShotBehaviour):
+    def __init__(self, message : Message):
+        super().__init__()
+        self.message = message
+    
     async def run(self):
-        message = await self.receive(timeout=5)
-        if message is None:
+        if self.message is None:
+            self.agent.logger.log("[HANDLE] - [ERROR] - No message received. {}".format(str(self.agent)))
             self.kill()
         else:
-            if message.metadata["performative"] == "refuse-proposal":
+            self.agent.logger.log("[HANDLE] - [RESPONSE] - {} - from {} with metadata :{}".format(str(self.agent.id), str(self.message.sender), str(self.message.metadata)))
+            if self.message.metadata["performative"] == "refuse-proposal":
                 self.kill()
-            elif message.metadata["performative"] == "agree-proposal":
-                drone_data = json.loads(message.body)
+            elif self.message.metadata["performative"] == "agree-proposal":
+                orders = json.loads(self.message.body)
                 
                 # This has to be verified if the drone is asking for orders only given to him
                 orders_id = []
-                for order in drone_data["orders"]:
+                for order_str in orders:
+                    order = json.loads(order_str)
                     self.agent.inventory[order["id"]].update_order_status()
-                    self.orders_to_be_picked.append(order["id"])
+                    self.agent.orders_to_be_picked.append(order["id"])
                     orders_id.append(order["id"])
                 
                 # These will not be available for other drones
-                self.agent.matrix.remove_order(orders_id = orders_id)
+                self.agent.orders_matrix.remove_orders(orders_id = orders_id)
             
     async def on_end(self):
         orders_left = sum([1 for order in self.agent.inventory.values() if order.order_status == False])
@@ -136,7 +147,7 @@ class DismissBehaviour(CyclicBehaviour):
         else:
             self.agent.logger.log(f"{self.agent.id} - [REFUSING] - [MESSAGE] {str(message.sender)}")
             message = Message(to=str(message.sender))
-            message.set_metadata("performative", "refuse")
+            message.set_metadata("performative", "refuse-proposal")
             await self.send(message)
     
     async def on_end(self):
@@ -169,7 +180,7 @@ class OrdersPickupBehaviour(OneShotBehaviour):
         
         answer = Message()
         answer.to = self.sender
-        answer.metadata = {"performative": "agree"}
+        answer.metadata = {"performative": "agree-proposal"}
         await self.send(answer)
         
     async def on_end(self):
@@ -194,9 +205,9 @@ class RechargeDroneBehaviour(OneShotBehaviour):
         answer.to = self.sender
         if self.message.metadata["performative"] == "request":
             self.agent.logger.log("[RECHARGE] Drone {} is requesting recharge... - {}".format(self.message.sender, str(self.agent)))
-            answer.metadata = {"performative": "agree"}
+            answer.metadata = {"performative": "agree-proposal"}
         else:
-            answer.metadata = {"performative": "refuse"}
+            answer.metadata = {"performative": "refuse-proposal"}
             
         await self.send(answer)
     

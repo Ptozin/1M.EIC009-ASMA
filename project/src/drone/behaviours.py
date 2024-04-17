@@ -81,7 +81,7 @@ class OrderSuggestionsBehaviour(CyclicBehaviour):
                 )
                 self.agent.available_order_sets[str(message.sender).split("@")[0]] = order_choices
                 
-            elif message.metadata["performative"] == "refuse":
+            elif message.metadata["performative"] == "refuse-proposal":
                 self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {str(message.sender)}")
                 self.agent.remove_warehouse(str(message.sender).split("@")[0])
                 
@@ -109,7 +109,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             for warehouse in self.agent.warehouse_positions.keys():
                 message = Message()
                 message.to = warehouse + "@localhost"
-                message.set_metadata("performative", "refuse")
+                message.set_metadata("performative", "refuse-proposal")
                 await self.send(message)
             self.kill(exit_code=DELIVERING)
         else:
@@ -121,13 +121,13 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                     # self.agent.next_orders += self.agent.available_order_sets[warehouse]
                     self.agent.orders_to_be_picked[warehouse] = self.agent.available_order_sets[warehouse]
                     self.agent.next_warehouse = warehouse
-                    message.set_metadata("performative", "agree")
+                    message.set_metadata("performative", "agree-proposal")
                     
                     orders = [order.__repr__() for order in self.agent.available_order_sets[winner]]
                     
                     message.body = json.dumps(orders)
                 else:
-                    message.set_metadata("performative", "refuse")
+                    message.set_metadata("performative", "refuse-proposal")
                 await self.send(message)
             self.kill(exit_code=RETURNING)
             
@@ -237,6 +237,8 @@ class PickUpOrdersBehaviour(OneShotBehaviour):
         
         message.body = json.dumps(orders_id)
         
+        print(f"[PICKUP] {self.agent.params.id} - {message.to}")
+        
         await self.send(message)
         
         response = await self.receive(timeout=5)
@@ -247,7 +249,7 @@ class PickUpOrdersBehaviour(OneShotBehaviour):
             self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - {response.sender}")
             
             # If the warehouse agrees to deliver the orders...
-            if response.metadata["performative"] == "agree":
+            if response.metadata["performative"] == "agree-proposal":
                 self.agent.next_orders += self.agent.available_order_sets[self.agent.next_warehouse]
 
         
@@ -273,10 +275,10 @@ class RechargeBehaviour(OneShotBehaviour):
             self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No response from warehouse to recharge. Self Destruction activated.")
             self.kill(exit_code=ERROR)
         else:
-            if response.metadata["performative"] == "refuse":
+            if response.metadata["performative"] == "refuse-proposal":
                 self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Warehouse {response.sender} refused to recharge drone. Self Destruction activated.")
                 self.kill(exit_code=ERROR)
-            elif response.metadata["performative"] == "agree":
+            elif response.metadata["performative"] == "agree-proposal":
                 self.agent.logger.log(f"[RECHARGE] {self.agent.params.id} at Warehouse {response.sender}")
                 self.agent.params.refill_autonomy()
                 self.kill()

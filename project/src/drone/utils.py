@@ -115,6 +115,20 @@ def combine_orders(orders : list[DeliveryOrder], capacity : int) -> list[list[De
 # ---------------------------------------------------------------------------------------------
 
 def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, velocity: float) -> list[DeliveryOrder]:
+    
+    ret_orders = []
+    total_capacity = capacity
+    
+    for order in orders:
+        if order.weight <= total_capacity:
+            ret_orders.append(order)
+            total_capacity -= order.weight
+        if total_capacity == 0:
+            break
+    return ret_orders
+    
+    # TODO: FOR TESTING PURPOSES
+    
     order_sets = combine_orders(orders, capacity)
     best_set = None
     best_utility = float('-inf')

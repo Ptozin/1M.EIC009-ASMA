@@ -5,7 +5,7 @@ from flask_socketio import SocketIO
 
 from order import DeliveryOrder
 from misc.log import Logger
-from warehouse.behaviours import EmitSetupBehaviour
+from warehouse.behaviours import EmitSetupBehaviour, IdleBehaviour
 from warehouse.utils import OrdersMatrix
             
 # ----------------------------------------------------------------------------------------------
@@ -42,6 +42,7 @@ class WarehouseAgent(Agent):
 
     async def setup(self) -> None:
         self.logger.log(f"{self.id} - [SETUP]")
+        self.add_behaviour(IdleBehaviour())
         self.add_behaviour(EmitSetupBehaviour())
 
 # ----------------------------------------------------------------------------------------------
