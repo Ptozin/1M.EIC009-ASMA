@@ -1,7 +1,5 @@
-from warehouse_agent import WarehouseAgent
-from drone_agent import DroneAgent
-# from warehouse.agent import WarehouseAgent
-# from drone.agent import DroneAgent
+from warehouse.agent import WarehouseAgent
+from drone.agent import DroneAgent
 from flask_socketio import SocketIO
 import spade
 

@@ -29,6 +29,9 @@ METADATA_NEXT_BEHAVIOUR = "next_behaviour"
 # ----------------------------------------------------------------------------------------------
 
 class AvailableBehaviour(OneShotBehaviour):
+    async def on_start(self):
+        self.responses = []
+
     async def run(self):
         for warehouse in self.agent.warehouse_positions.keys():
             message = Message()
@@ -37,29 +40,31 @@ class AvailableBehaviour(OneShotBehaviour):
             message.set_metadata("performative", "inform")
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
             await self.send(message)
+            response = await self.receive(timeout=5)
+            self.responses.append(response)
             
     async def on_end(self):
-        self.agent.add_behaviour(OrderSuggestionsBehaviour())
+        self.agent.add_behaviour(OrderSuggestionsBehaviour(self.responses))
         
 # ----------------------------------------------------------------------------------------------
 
 class OrderSuggestionsBehaviour(CyclicBehaviour):
+    def __init__(self, messages : list[Message]):
+        super().__init__()
+        self.messages = messages
+
     async def on_start(self):
-        self.counter = 0
-        self.limit = 3
         self.agent.available_order_sets = {}
     
     async def run(self):
         if len(self.agent.available_order_sets) == len(self.agent.warehouse_positions):
             self.kill(exit_code=DECIDING)
         
-        message = await self.receive(timeout=5)
-        if message is None:
-            self.agent.logger.log(f"{self.agent.params.id} - [WAITING] - Waiting for available orders... try {self.counter}/{self.limit}")
-            self.counter += 1
-            if self.counter >= self.limit:
-                self.kill(exit_code=DISMISSED)
-        else:
+        for message in self.messages:
+            if message is None:
+                self.kill(exit_code=ERROR)
+                return
+            
             if message.metadata["performative"] == "propose":
                 proposed_orders = json.loads(message.body)
                 orders = []
@@ -74,17 +79,21 @@ class OrderSuggestionsBehaviour(CyclicBehaviour):
                     self.agent.params.max_capacity, 
                     self.agent.params.velocity
                 )
-                self.agent.available_order_sets[message.sender.split("@")[0]] = order_choices
+                self.agent.available_order_sets[str(message.sender).split("@")[0]] = order_choices
                 
             elif message.metadata["performative"] == "refuse":
-                self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {message.sender}")
-                self.agent.remove_warehouse(message.sender.split("@")[0])
+                self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {str(message.sender)}")
+                self.agent.remove_warehouse(str(message.sender).split("@")[0])
                 
                 if not self.agent.any_warehouse_available():
                     self.kill(exit_code=DISMISSED)
+                    return
             
     async def on_end(self):
-        if self.exit_code == DECIDING:
+        if self.exit_code == ERROR:
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No response from warehouse. Self Destruction activated.")
+            await self.agent.stop()
+        elif self.exit_code == DECIDING:
             self.agent.add_behaviour(DecideOrdersBehaviour())
         elif self.exit_code == DISMISSED:
             self.agent.logger.log(self.agent.params.metrics())
@@ -95,7 +104,7 @@ class OrderSuggestionsBehaviour(CyclicBehaviour):
 
 class DecideOrdersBehaviour(OneShotBehaviour):
     async def run(self):
-        winner = best_order_decision(self.agent)
+        winner = self.agent.best_order_decision()
         if winner is None:
             for warehouse in self.agent.warehouse_positions.keys():
                 message = Message()

@@ -4,10 +4,10 @@ import json
 from spade.agent import Agent
 
 from order import DeliveryOrder
-from parameters import DroneParameters
+from drone.parameters import DroneParameters
 from misc.log import Logger
-from behaviours import AvailableBehaviour, EmitSetupBehaviour
-from utils import *
+from drone.behaviours import EmitSetupBehaviour
+from drone.utils import *
 from flask_socketio import SocketIO
 
 # ----------------------------------------------------------------------------------------------
@@ -36,6 +36,7 @@ class DroneAgent(Agent):
         
         self.logger = Logger(filename = id)
         self.socketio = socketio
+        self.orders_to_visualize : list[DeliveryOrder] = []
         
     async def setup(self) -> None:
         """
@@ -109,5 +110,66 @@ class DroneAgent(Agent):
         self.params.drop_order(order.weight)
         self.next_orders.remove(order)
         self.next_order = None
+
+        # update order status on the total orders list
+        order.update_order_status()
+        self.orders_to_visualize.append(order)
+
+# ----------------------------------------------------------------------------------------------
+
+    def best_order_decision(self) -> str:
+        winner = None
+        drone_utility = float('-inf')
+        
+        if self.next_orders:
+            orders = self.next_orders
+            closest = closest_order(self.position["latitude"], self.position["longitude"], orders)
+            distance_closest_order = haversine_distance(
+                self.position["latitude"], 
+                self.position["longitude"], 
+                closest.destination_position['latitude'], 
+                closest.destination_position['longitude']
+            )
+            path = generate_path(orders, closest)
+            travel_distance = distance_closest_order + calculate_travel_distance(path)
+                
+            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
+            drone_utility = utility(travel_distance, self.params.velocity, capacity_level)
+            
+        # print available_order_sets
+        print(f"{self.params.id} - [BEST ORDER DECISION] - {self.available_order_sets}")
+        
+        for warehouse, orders in self.available_order_sets.items():
+            if self.next_orders:
+                orders += self.next_orders
+            distance_warehouse = haversine_distance(
+                self.position["latitude"], 
+                self.position["longitude"], 
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude']
+            )
+            closest_to_warehouse = closest_order(
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude'], 
+                orders
+            )
+            distance_warehouse_to_closest_order = haversine_distance(
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude'], 
+                closest_to_warehouse.destination_position['latitude'], 
+                closest_to_warehouse.destination_position['longitude']
+            )
+            path = generate_path(orders, closest_to_warehouse)
+            travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
+                
+            orders += self.next_orders
+            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
+            new_utility = utility(travel_distance, self.params.velocity, capacity_level)
+                
+            if new_utility > drone_utility:
+                winner = warehouse
+                drone_utility = new_utility  
+        
+        return winner
 
 # ----------------------------------------------------------------------------------------------

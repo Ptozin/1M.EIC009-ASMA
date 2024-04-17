@@ -15,6 +15,7 @@ class OrdersMatrix:
         inventory (dict[str, DeliveryOrder]): The inventory of orders.
         divisions (int): The number of divisions for the matrix.
         capacity_multiplier (int): The capacity multiplier for the drones.
+        warehouse_position (dict): The position of the warehouse.
         
     Attributes:
         corners (list): The corners of the matrix.
@@ -22,8 +23,8 @@ class OrdersMatrix:
         capacity_multiplier (int): The capacity multiplier for the drones.
         matrix (np.array): The matrix of orders.
     """
-    def __init__(self, inventory : dict[str, DeliveryOrder], divisions : int = 5, capacity_multiplier : int = 3) -> None:
-        self.corners : list = self.__setup(inventory)
+    def __init__(self, inventory : dict[str, DeliveryOrder], divisions : int = 5, capacity_multiplier : int = 3, warehouse_position : dict = {}) -> None:
+        self.corners : list = self.__setup(inventory, warehouse_position)
         self.divisions : int = divisions
         self.capacity_multiplier : int = capacity_multiplier
         
@@ -35,10 +36,12 @@ class OrdersMatrix:
         for i in range(self.divisions):
             for j in range(self.divisions):
                 self.matrix[i, j] = []
+
+        self.populate_matrix(inventory)
                 
     # ----------------------------------------------------------------------------------------------            
                 
-    def __setup(self, inventory) -> list:
+    def __setup(self, inventory, warehouse_position) -> list:
         # Extract the minimum and maximum coordinates for the destination positions, and add a small buffer
         buffer = 0.01
         
@@ -46,6 +49,11 @@ class OrdersMatrix:
         max_dest_lat = max(order.destination_position["latitude"] for order in inventory.values()) + buffer
         min_dest_long = min(order.destination_position["longitude"] for order in inventory.values()) - buffer
         max_dest_long = max(order.destination_position["longitude"] for order in inventory.values()) + buffer
+
+        min_dest_lat = min(min_dest_lat, warehouse_position["latitude"]) - buffer
+        max_dest_lat = max(max_dest_lat, warehouse_position["latitude"]) + buffer
+        min_dest_long = min(min_dest_long, warehouse_position["longitude"]) - buffer
+        max_dest_long = max(max_dest_long, warehouse_position["longitude"]) + buffer
 
         bottom_left = (min_dest_lat, min_dest_long)
         bottom_right = (min_dest_lat, max_dest_long)
@@ -117,7 +125,7 @@ class OrdersMatrix:
         while queue:
             x, y = queue.popleft()
             
-            print(f"Retrieving orders from cell ({x}, {y})")
+            # print(f"Retrieving orders from cell ({x}, {y})")
             
             # Retrieve orders in the current cell
             cell_orders = self.matrix[x, y]

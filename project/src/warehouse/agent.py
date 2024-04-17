@@ -6,7 +6,7 @@ from flask_socketio import SocketIO
 from order import DeliveryOrder
 from misc.log import Logger
 from warehouse.behaviours import EmitSetupBehaviour
-from utils import OrdersMatrix
+from warehouse.utils import OrdersMatrix
             
 # ----------------------------------------------------------------------------------------------
 

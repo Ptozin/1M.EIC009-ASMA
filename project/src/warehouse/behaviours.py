@@ -20,7 +20,12 @@ METADATA_NEXT_BEHAVIOUR = "next_behaviour"
 
 class SetupOrdersMatrixBehaviour(OneShotBehaviour):
     async def run(self):
-        self.agent.orders_matrix = OrdersMatrix(self.agent.inventory, divisions=5, capacity_multiplier=3)
+        self.agent.orders_matrix = OrdersMatrix(
+                self.agent.inventory, 
+                divisions=5, 
+                capacity_multiplier=3,
+                warehouse_position=self.agent.position
+            )
     
     async def on_end(self):
         self.agent.add_behaviour(IdleBehaviour())
@@ -70,16 +75,21 @@ class IdleBehaviour(CyclicBehaviour):
 class SuggestOrdersBehaviour(OneShotBehaviour):
     def __init__(self, message : Message):
         super().__init__()
-        self.sender = message.sender
+        self.sender = str(message.sender)
         self.drone_capacity = json.loads(message.body)["capacity"]
         
     async def run(self):
         message = Message()
         message.to = self.sender
-        message.body = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
+
+        orders : list[DeliveryOrder] = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
                                                               self.agent.position['longitude'], 
                                                               self.drone_capacity)
+        
+        message.body = json.dumps([order.__repr__() for order in orders])
+        
         message.set_metadata("performative", "propose")
+
         await self.send(message)
         self.kill(exit_code=HANDLE_SUGGESTION)
         
@@ -138,6 +148,7 @@ class OrdersPickupBehaviour(OneShotBehaviour):
     def __init__(self, message : Message):
         super().__init__()
         self.message : Message = message
+        self.sender = str(message.sender)
     
     async def run(self):
         # TODO: DO NOT AWAIT FOR MESSAGES, USE IDLE BEHAVIOUR AND PROCESS MESSAGE HERE
@@ -154,7 +165,7 @@ class OrdersPickupBehaviour(OneShotBehaviour):
             .format(str(len(orders)),str(self.agent)))
         
         answer = Message()
-        answer.to = str(self.message.sender)
+        answer.to = self.sender
         answer.metadata = {"performative": "agree"}
         await self.send(answer)
         
@@ -169,12 +180,13 @@ class RechargeDroneBehaviour(OneShotBehaviour):
     def __init__(self, message : Message):
         super().__init__()
         self.message : Message = message
+        self.sender = str(message.sender)
         
     async def run(self):
         if self.message is None:
             self.kill(exit_code=ERROR)
         answer = Message()
-        answer.to = str(self.message.sender)
+        answer.to = self.sender
         if self.message.metadata["performative"] == "request":
             self.agent.logger.log("[RECHARGE] Drone {} is requesting recharge... - {}".format(self.message.sender, str(self.agent)))
             answer.metadata = {"performative": "agree"}

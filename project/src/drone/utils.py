@@ -36,13 +36,13 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
     if start_order not in orders:
         return []
     path = [start_order]
-    visited = set(path)
+    visited = {start_order.id}  # Initialize visited with the order ID of the start order
     current_order = start_order
     while len(path) < len(orders):
         next_order = None
         min_distance = float('inf')
         for order in orders:
-            if order not in visited:
+            if order.id not in visited:  
                 distance = haversine_distance(
                     current_order.destination_position['latitude'], 
                     current_order.destination_position['longitude'], 
@@ -53,7 +53,7 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
                     min_distance = distance
                     next_order = order
         if next_order:
-            visited.add(next_order)
+            visited.add(next_order.id)  
             path.append(next_order)
             current_order = next_order
         else:
@@ -128,56 +128,5 @@ def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitud
             best_set = order_set
             best_utility = set_utility
     return best_set
-
-# ----------------------------------------------------------------------------------------------
-
-def best_order_decision(agent) -> str:
-    winner = None
-    
-    orders = agent.next_orders
-    closest = closest_order(agent.position["latitude"], agent.position["longitude"], orders)
-    distance_closest_order = haversine_distance(
-        agent.position["latitude"], 
-        agent.position["longitude"], 
-        closest.destination_position['latitude'], 
-        closest.destination_position['longitude']
-    )
-    path = generate_path(orders, closest)
-    travel_distance = distance_closest_order + calculate_travel_distance(path)
-        
-    capacity_level = calculate_capacity_level(orders, agent.params.max_capacity)
-    drone_utility = utility(travel_distance, agent.params.velocity, capacity_level)
-        
-    for warehouse, orders in agent.available_order_sets.items():
-        orders = agent.next_orders + orders    
-        distance_warehouse = haversine_distance(
-            agent.position["latitude"], 
-            agent.position["longitude"], 
-            agent.warehouse_positions[warehouse]['latitude'], 
-            agent.warehouse_positions[warehouse]['longitude']
-        )
-        closest_to_warehouse = closest_order(
-            agent.warehouse_positions[warehouse]['latitude'], 
-            agent.warehouse_positions[warehouse]['longitude'], 
-            orders
-        )
-        distance_warehouse_to_closest_order = haversine_distance(
-            agent.warehouse_positions[warehouse]['latitude'], 
-            agent.warehouse_positions[warehouse]['longitude'], 
-            closest_to_warehouse.destination_position['latitude'], 
-            closest_to_warehouse.destination_position['longitude']
-        )
-        path = generate_path(orders, closest_to_warehouse)
-        travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
-            
-        orders += agent.next_orders
-        capacity_level = calculate_capacity_level(orders, agent.params.max_capacity)
-        new_utility = utility(travel_distance, agent.params.velocity, capacity_level)
-            
-        if new_utility > drone_utility:
-            winner = warehouse
-            drone_utility = new_utility  
-    
-    return winner
 
 # ----------------------------------------------------------------------------------------------
