@@ -31,6 +31,12 @@ class DroneParameters:
             {"order_Y": {"latitude": 37.7749, "longitude": -122.4194}},
             {"center_Z": {"latitude": 37.7749, "longitude": -122.4194}},            
         ]
+        
+    def refill_autonomy(self) -> None:
+        """
+        Method to refill the drone's autonomy.
+        """
+        self.curr_autonomy = self.max_autonomy
 
 # ----------------------------------------------------------------------------------------------
     

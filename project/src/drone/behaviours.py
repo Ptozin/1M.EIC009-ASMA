@@ -18,6 +18,14 @@ RETURNING = 40
 RETURNED = 50
 ERROR = 60
 
+# ---
+
+SUGGEST_ORDER = "suggest"
+ORDER_PICKUP = "pickup_orders"
+RECHARGE_DRONE = "recharge"
+
+METADATA_NEXT_BEHAVIOUR = "next_behaviour"
+
 # ----------------------------------------------------------------------------------------------
 
 class AvailableBehaviour(OneShotBehaviour):
@@ -27,6 +35,7 @@ class AvailableBehaviour(OneShotBehaviour):
             message.to = warehouse + "@localhost"
             message.body = self.agent.__repr__()
             message.set_metadata("performative", "inform")
+            message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
             await self.send(message)
             
     async def on_end(self):
@@ -51,7 +60,7 @@ class OrderSuggestionsBehaviour(CyclicBehaviour):
             if self.counter >= self.limit:
                 self.kill(exit_code=DISMISSED)
         else:
-            if message.metadata["performative"] == "inform":
+            if message.metadata["performative"] == "propose":
                 proposed_orders = json.loads(message.body)
                 orders = []
                 for order in proposed_orders:
@@ -71,7 +80,7 @@ class OrderSuggestionsBehaviour(CyclicBehaviour):
                 self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {message.sender}")
                 self.agent.remove_warehouse(message.sender.split("@")[0])
                 
-                if not self.agent.available_warehouses():
+                if not self.agent.any_warehouse_available():
                     self.kill(exit_code=DISMISSED)
             
     async def on_end(self):
@@ -110,9 +119,9 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             
     async def on_end(self):
         if self.exit_code == DELIVERING:
-            self.agent.add_behaviour(DeliverBehaviour(period=1.0, start_at=datetime.datetime.now()))
+            self.agent.add_behaviour(DeliverBehaviour(period=1.0))
         elif self.exit_code == RETURNING:
-            self.agent.add_behaviour(ReturnBehaviour(period=1.0, start_at=datetime.datetime.now()))
+            self.agent.add_behaviour(ReturnBehaviour(period=1.0))
 
 # ----------------------------------------------------------------------------------------------
 
@@ -162,7 +171,7 @@ class DeliverBehaviour(PeriodicBehaviour):
 
 class ReturnBehaviour(PeriodicBehaviour):
     async def run(self):
-        if not self.agent.available_warehouses():
+        if not self.agent.any_warehouse_available():
             self.kill(exit_code=ERROR)
             return 
         next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
@@ -203,29 +212,65 @@ class ReturnBehaviour(PeriodicBehaviour):
         elif self.exit_code == RETURNED:
             self.agent.logger.log(f"[RETURNED] {self.agent.params.id}")
             self.agent.add_behaviour(AvailableBehaviour())
-        else:
-            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Unexpected error")
-            await self.agent.stop()
 
 # ----------------------------------------------------------------------------------------------
 
 class PickUpOrdersBehaviour(OneShotBehaviour):
     async def run(self):
         # TODO: Implement this behaviour
-        pass
+        message = Message()
+        message.to = self.agent.next_warehouse + "@localhost"
+        message.set_metadata(METADATA_NEXT_BEHAVIOUR, ORDER_PICKUP)
+        
+        orders_id = [order.id for order in self.agent.next_orders]
+        
+        message.body = json.dumps(orders_id)
+        
+        await self.send(message)
+        
+        response = await self.receive(timeout=5)
+        if response is None:
+            self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - No response from warehouse. Self Destruction activated.")
+            self.kill(exit_code=ERROR)
+        else:
+            self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - {response.sender}")
+            ... # update the agent's orders
         
     async def on_end(self):
-        pass
+        if self.exit_code == ERROR:
+            await self.agent.stop()
+        else:
+            self.agent.add_behaviour(RechargeBehaviour())
         
 # ----------------------------------------------------------------------------------------------
 
 class RechargeBehaviour(OneShotBehaviour):
     async def run(self):
-        # TODO: Implement this behaviour
-        pass
+        message = Message()
+        message.to = self.agent.next_warehouse + "@localhost"
+        message.set_metadata("performative", "request")
+        message.set_metadata(METADATA_NEXT_BEHAVIOUR, RECHARGE_DRONE)
+        await self.send(message)
         
+        response = await self.receive(timeout=5)
+        
+        if response is None:
+            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No response from warehouse to recharge. Self Destruction activated.")
+            self.kill(exit_code=ERROR)
+        else:
+            if response.metadata["performative"] == "refuse":
+                self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Warehouse {response.sender} refused to recharge drone. Self Destruction activated.")
+                self.kill(exit_code=ERROR)
+            elif response.metadata["performative"] == "agree":
+                self.agent.logger.log(f"[RECHARGE] {self.agent.params.id} at Warehouse {response.sender}")
+                self.agent.params.refill_autonomy()
+                self.kill()
+
     async def on_end(self):
-        pass
+        if self.exit_code == ERROR:
+            await self.agent.stop()
+        else:
+            self.agent.add_behaviour(DeliverBehaviour(period=1.0))
 
 # ----------------------------------------------------------------------------------------------
 
@@ -266,5 +311,6 @@ class EmitSetupBehaviour(OneShotBehaviour):
         
     async def on_end(self) -> None:
         self.agent.add_behaviour(EmitPositionBehaviour(period=1.0))
+        self.agent.add_behaviour(AvailableBehaviour())
             
 # ----------------------------------------------------------------------------------------------

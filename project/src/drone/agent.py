@@ -25,6 +25,7 @@ class DroneAgent(Agent):
         self.warehouse_positions : dict = warehouse_positions    
         self.distance_to_next_warehouse = 0.0
         self.available_order_sets : dict = {}
+        self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
     
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
@@ -42,7 +43,6 @@ class DroneAgent(Agent):
         """
         print(f"{self.params.id} - [SETUP]")
         self.add_behaviour(EmitSetupBehaviour())
-        self.add_behaviour(AvailableBehaviour())
 
     def __str__(self) -> str:
         return str(self.params)
@@ -57,7 +57,7 @@ class DroneAgent(Agent):
         
     # ----------------------------------------------------------------------------------------------
 
-    def available_warehouses(self) -> bool:
+    def any_warehouse_available(self) -> bool:
         """
         Method to check if there are any warehouses available.
 
