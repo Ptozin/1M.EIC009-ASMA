@@ -115,9 +115,9 @@ def combine_orders(orders : list[DeliveryOrder], capacity : int) -> list[list[De
 # ---------------------------------------------------------------------------------------------
 
 def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, velocity: float) -> list[DeliveryOrder]:
+    order_sets = combine_orders(orders, capacity)
     best_set = None
     best_utility = float('-inf')
-    order_sets = combine_orders(orders, capacity)
     for order_set in order_sets:
         first_order = closest_order(latitude, longitude, order_set)
         path = generate_path(order_set, first_order)
@@ -132,9 +132,9 @@ def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitud
 # ----------------------------------------------------------------------------------------------
 
 def best_order_decision(agent) -> str:
+    winner = None
+    
     orders = agent.next_orders
-    path = generate_path(orders)
-        
     closest = closest_order(agent.position["latitude"], agent.position["longitude"], orders)
     distance_closest_order = haversine_distance(
         agent.position["latitude"], 
@@ -142,23 +142,21 @@ def best_order_decision(agent) -> str:
         closest.destination_position['latitude'], 
         closest.destination_position['longitude']
     )
+    path = generate_path(orders, closest)
     travel_distance = distance_closest_order + calculate_travel_distance(path)
         
     capacity_level = calculate_capacity_level(orders, agent.params.max_capacity)
     drone_utility = utility(travel_distance, agent.params.velocity, capacity_level)
-    winner = None
         
     for warehouse, orders in agent.available_order_sets.items():
-        orders = agent.next_orders + orders
-        path = generate_path(orders)
-            
+        orders = agent.next_orders + orders    
         distance_warehouse = haversine_distance(
             agent.position["latitude"], 
             agent.position["longitude"], 
             agent.warehouse_positions[warehouse]['latitude'], 
             agent.warehouse_positions[warehouse]['longitude']
         )
-        closest = closest_order(
+        closest_to_warehouse = closest_order(
             agent.warehouse_positions[warehouse]['latitude'], 
             agent.warehouse_positions[warehouse]['longitude'], 
             orders
@@ -166,9 +164,10 @@ def best_order_decision(agent) -> str:
         distance_warehouse_to_closest_order = haversine_distance(
             agent.warehouse_positions[warehouse]['latitude'], 
             agent.warehouse_positions[warehouse]['longitude'], 
-            closest.destination_position['latitude'], 
-            closest.destination_position['longitude']
+            closest_to_warehouse.destination_position['latitude'], 
+            closest_to_warehouse.destination_position['longitude']
         )
+        path = generate_path(orders, closest_to_warehouse)
         travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
             
         orders += agent.next_orders
