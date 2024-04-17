@@ -30,131 +30,11 @@ class AvailableBehaviour(OneShotBehaviour):
             await self.send(message)
             
     async def on_end(self):
-        self.agent.add_behaviour(ReceiveOrdersBehaviour())
-            
-# ----------------------------------------------------------------------------------------------
-
-class DecideOrdersBehaviour(OneShotBehaviour):
-    async def run(self):
-        winner = self.best_order_decision()
-        if winner is None:
-            for warehouse in self.agent.warehouse_positions.keys():
-                message = Message()
-                message.to = warehouse + "@localhost"
-                message.set_metadata("performative", "refuse")
-                await self.send(message)
-            self.kill(exit_code=DELIVERING)
-        else:
-            for warehouse in self.agent.warehouse_positions.keys():
-                message = Message()
-                message.to = warehouse + "@localhost"
-                if warehouse == winner:
-                    self.agent.next_orders += self.agent.available_order_sets[warehouse]
-                    self.agent.next_warehouse = warehouse
-                    message.set_metadata("performative", "agree")
-                    message.body = self.agent.available_order_sets[winner]
-                else:
-                    message.set_metadata("performative", "refuse")
-                await self.send(message)
-            self.kill(exit_code=RETURNING)
-            
-    async def on_end(self):
-        if self.exit_code == DELIVERING:
-            self.agent.add_behaviour(DeliverBehaviour(period=1.0, start_at=datetime.datetime.now()))
-        elif self.exit_code == RETURNING:
-            self.agent.add_behaviour(ReturnBehaviour(period=1.0, start_at=datetime.datetime.now()))
-      
-    # ----------------------------------------------------------------------------------------------
-      
-    def best_order_decision(self) -> str:
-        orders = self.agent.next_orders
-        path = generate_path(orders)
-        travel_time = self.time_to_order(orders) + calculate_travel_time(path, self.agent.params.velocity)
-        capacity_level = calculate_capacity_level(orders, self.agent.params.max_capacity)
-        utility = utility(travel_time, capacity_level)
-        winner = None
-        for warehouse, orders in self.agent.available_order_sets.items():
-            orders = self.agent.next_orders + orders
-            path = generate_path(orders)
-            travel_time = self.time_to_warehouse(warehouse) + self.time_warehouse_to_order(warehouse, orders) + calculate_travel_time(path, self.agent.params.velocity)
-            orders += self.agent.next_orders
-            capacity_level = calculate_capacity_level(orders, self.agent.params.max_capacity)
-            new_utility = utility(travel_time, capacity_level)
-            if new_utility > utility:
-                winner = warehouse
-                utility = new_utility
-        return winner
-
-    def time_to_order(self, orders : list[DeliveryOrder]) -> float:
-        closest = closest_order(
-            self.agent.position["latitude"],
-            self.agent.position["longitude"], 
-            orders
-        )
-        distance = haversine_distance(self.agent.position, closest.destination_position)
-        return distance / self.agent.params.velocity
+        self.agent.add_behaviour(OrderSuggestionsBehaviour())
         
-    def time_to_warehouse(self, warehouse : str) -> float:
-        distance = haversine_distance(self.agent.position, self.agent.warehouse_positions[warehouse])
-        return distance / self.agent.params.velocity
-    
-    def time_warehouse_to_order(self, warehouse : str, orders : list[DeliveryOrder]) -> float:
-        closest = closest_order(
-            self.agent.warehouse_positions[warehouse]['latitude'], 
-            self.agent.warehouse_positions[warehouse]['longitude'], 
-            orders
-        )
-        distance = haversine_distance(self.agent.warehouse_positions[warehouse], closest.destination_position)
-        return distance / self.agent.params.velocity
-
 # ----------------------------------------------------------------------------------------------
 
-class DeliverBehaviour(PeriodicBehaviour):
-    async def run(self):
-        if len(self.agent.next_orders) == 0:
-            self.kill()
-        else:
-            if self.agent.next_order is None:
-                self.agent.next_order = self.agent.next_orders[0]
-                            
-            position = next_position(
-                    self.agent.position['latitude'],
-                    self.agent.position['longitude'],
-                    self.agent.next_order.destination_position['latitude'],
-                    self.agent.next_order.destination_position['longitude'],
-                    self.agent.params.velocity * TIME_MULTIPLIER
-                )
-            
-            self.agent.params.curr_autonomy -= haversine_distance(
-                self.agent.position['latitude'],
-                self.agent.position['longitude'],
-                position['latitude'],
-                position['longitude']
-            )
-            
-            self.agent.position = position
-            
-            self.agent.logger.log("[DELIVERING] {} - {} meters to next drop-off"\
-                .format(str(self.agent), 
-                        round(
-                            haversine_distance(self.agent.position['latitude'], 
-                                           self.agent.position['longitude'], 
-                                           self.agent.next_order.destination_position['latitude'], 
-                                           self.agent.next_order.destination_position['longitude']),
-                            2
-                        ))
-                )
-            
-            if self.agent.arrived_to_target(self.agent.next_order.destination_position['latitude'], self.agent.next_order.destination_position['longitude']):
-                self.agent.drop_order(self.agent.next_order)
-                self.kill()
-    
-    async def on_end(self):
-        self.agent.add_behaviour(AvailableBehaviour())
-
-# ----------------------------------------------------------------------------------------------
-
-class ReceiveOrdersBehaviour(CyclicBehaviour):
+class OrderSuggestionsBehaviour(CyclicBehaviour):
     async def on_start(self):
         self.counter = 0
         self.limit = 3
@@ -204,19 +84,102 @@ class ReceiveOrdersBehaviour(CyclicBehaviour):
             
 # ----------------------------------------------------------------------------------------------
 
+class DecideOrdersBehaviour(OneShotBehaviour):
+    async def run(self):
+        winner = best_order_decision(self.agent)
+        if winner is None:
+            for warehouse in self.agent.warehouse_positions.keys():
+                message = Message()
+                message.to = warehouse + "@localhost"
+                message.set_metadata("performative", "refuse")
+                await self.send(message)
+            self.kill(exit_code=DELIVERING)
+        else:
+            for warehouse in self.agent.warehouse_positions.keys():
+                message = Message()
+                message.to = warehouse + "@localhost"
+                if warehouse == winner:
+                    self.agent.next_orders += self.agent.available_order_sets[warehouse]
+                    self.agent.next_warehouse = warehouse
+                    message.set_metadata("performative", "agree")
+                    message.body = self.agent.available_order_sets[winner]
+                else:
+                    message.set_metadata("performative", "refuse")
+                await self.send(message)
+            self.kill(exit_code=RETURNING)
+            
+    async def on_end(self):
+        if self.exit_code == DELIVERING:
+            self.agent.add_behaviour(DeliverBehaviour(period=1.0, start_at=datetime.datetime.now()))
+        elif self.exit_code == RETURNING:
+            self.agent.add_behaviour(ReturnBehaviour(period=1.0, start_at=datetime.datetime.now()))
+
+# ----------------------------------------------------------------------------------------------
+
+class DeliverBehaviour(PeriodicBehaviour):
+    async def run(self):
+        if len(self.agent.next_orders) == 0:
+            self.kill()
+        else:
+            if self.agent.next_order is None:
+                self.agent.next_order = self.agent.next_orders[0]
+            next_order_lat = self.agent.next_order.destination_position['latitude']
+            next_order_lon = self.agent.next_order.destination_position['longitude']
+            position = next_position(
+                    self.agent.position['latitude'],
+                    self.agent.position['longitude'],
+                    next_order_lat,
+                    next_order_lon,
+                    self.agent.params.velocity * TIME_MULTIPLIER
+                )
+            self.agent.params.curr_autonomy -= haversine_distance(
+                self.agent.position['latitude'],
+                self.agent.position['longitude'],
+                position['latitude'],
+                position['longitude']
+            )
+            self.agent.position = position
+            if self.agent.arrived_to_target(next_order_lat, next_order_lon):
+                self.agent.drop_order(self.agent.next_order)
+                self.kill()
+            else:
+                self.agent.logger.log("[DELIVERING] {} - {} meters to next drop-off"\
+                    .format(str(self.agent), 
+                            round(
+                                haversine_distance(
+                                    self.agent.position['latitude'], 
+                                    self.agent.position['longitude'], 
+                                    next_order_lat, 
+                                    next_order_lon
+                                ), 2
+                            ))
+                    )
+    
+    async def on_end(self):
+        self.agent.add_behaviour(AvailableBehaviour())
+            
+# ----------------------------------------------------------------------------------------------
+
 class ReturnBehaviour(PeriodicBehaviour):
     async def run(self):
         if not self.agent.available_warehouses():
             self.kill(exit_code=ERROR)
             return 
         next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
-        self.agent.position = next_position(
+        position = next_position(
                 self.agent.position['latitude'],
                 self.agent.position['longitude'],
                 next_warehouse_lat,
                 next_warehouse_lon,
                 self.agent.params.velocity * TIME_MULTIPLIER
             )
+        self.agent.params.curr_autonomy -= haversine_distance(
+            self.agent.position['latitude'],
+            self.agent.position['longitude'],
+            position['latitude'],
+            position['longitude']
+        )
+        self.agent.position = position
         if self.agent.arrived_to_target(next_warehouse_lat, next_warehouse_lon):
             self.agent.params.curr_autonomy = self.agent.params.max_autonomy
             self.agent.next_warehouse = None
@@ -229,8 +192,8 @@ class ReturnBehaviour(PeriodicBehaviour):
                             self.agent.position['longitude'], 
                             next_warehouse_lat,
                             next_warehouse_lon
-                        ),2)
-                    )
+                        ), 2
+                    ))
                 )
     
     async def on_end(self):
@@ -246,13 +209,29 @@ class ReturnBehaviour(PeriodicBehaviour):
 
 # ----------------------------------------------------------------------------------------------
 
-# Visualization Behaviours
-
-class EmitPositionBehav(PeriodicBehaviour):
+class PickUpOrdersBehaviour(OneShotBehaviour):
     async def run(self):
+        # TODO: Implement this behaviour
+        pass
         
-        data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
+    async def on_end(self):
+        pass
+        
+# ----------------------------------------------------------------------------------------------
 
+class RechargeBehaviour(OneShotBehaviour):
+    async def run(self):
+        # TODO: Implement this behaviour
+        pass
+        
+    async def on_end(self):
+        pass
+
+# ----------------------------------------------------------------------------------------------
+
+class EmitPositionBehaviour(PeriodicBehaviour):
+    async def run(self):
+        data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
         data.append({
             'id': self.agent.params.id,
             'latitude': self.agent.position['latitude'],
@@ -263,15 +242,15 @@ class EmitPositionBehav(PeriodicBehaviour):
             'orders_delivered': self.agent.params.orders_delivered,
             'type': 'drone'
         })        
-        
         self.agent.socketio.emit(
             'update_data', 
             data
         )
-        
         self.agent.orders_to_visualize = []
         
-class EmitSetupBehav(OneShotBehaviour):
+# ----------------------------------------------------------------------------------------------
+        
+class EmitSetupBehaviour(OneShotBehaviour):
     async def run(self):
         self.agent.socketio.emit(
             'update_data', 
@@ -284,7 +263,8 @@ class EmitSetupBehav(OneShotBehaviour):
                 }
             ]
         )
+        
     async def on_end(self) -> None:
-        self.agent.add_behaviour(EmitPositionBehav(period=1.0))
+        self.agent.add_behaviour(EmitPositionBehaviour(period=1.0))
             
 # ----------------------------------------------------------------------------------------------

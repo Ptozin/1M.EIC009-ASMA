@@ -1,11 +1,11 @@
 # ----------------------------------------------------------------------------------------------
 
 from spade.agent import Agent
+from flask_socketio import SocketIO
 
 from order import DeliveryOrder
 from misc.log import Logger
-from warehouse.behaviours import IdleBehaviour, EmitSetupBehav, SetupOrdersMatrixBehav
-from flask_socketio import SocketIO
+from warehouse.behaviours import SetupOrdersMatrixBehaviour, IdleBehaviour, EmitSetupBehaviour
 from utils import OrdersMatrix
             
 # ----------------------------------------------------------------------------------------------
@@ -42,8 +42,8 @@ class WarehouseAgent(Agent):
 
     async def setup(self) -> None:
         self.logger.log(f"{self.id} - [SETUP]")
-        self.add_behaviour(EmitSetupBehav())
-        self.add_behaviour(SetupOrdersMatrixBehav())
+        self.add_behaviour(EmitSetupBehaviour())
+        self.add_behaviour(SetupOrdersMatrixBehaviour())
         self.add_behaviour(IdleBehaviour())
 
 # ----------------------------------------------------------------------------------------------

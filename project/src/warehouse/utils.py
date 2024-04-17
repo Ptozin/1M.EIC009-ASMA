@@ -1,9 +1,9 @@
 # ----------------------------------------------------------------------------------------------
 
-import json
 import numpy as np
-from order import DeliveryOrder
 from collections import deque
+
+from order import DeliveryOrder
 
 # ----------------------------------------------------------------------------------------------
 
@@ -36,6 +36,8 @@ class OrdersMatrix:
             for j in range(self.divisions):
                 self.matrix[i, j] = []
                 
+    # ----------------------------------------------------------------------------------------------            
+                
     def __setup(self, inventory) -> list:
         # Extract the minimum and maximum coordinates for the destination positions, and add a small buffer
         buffer = 0.01
@@ -51,6 +53,8 @@ class OrdersMatrix:
         top_right = (max_dest_lat, max_dest_long)
         
         return [bottom_left, bottom_right, top_left, top_right]
+    
+    # ----------------------------------------------------------------------------------------------
     
     def calculate_cell_index(self, latitude : float, longitude : float) -> tuple:        
         # Extract the coordinates of the top left corner
@@ -70,6 +74,8 @@ class OrdersMatrix:
         
         return i, j
     
+    # ----------------------------------------------------------------------------------------------
+    
     def populate_matrix(self, inventory : dict[str, DeliveryOrder]) -> None:
         for order in inventory.values():
             # Calculate the cell index for the order
@@ -79,6 +85,8 @@ class OrdersMatrix:
             self.matrix[i, j].append(order)
             
             # print(f"Order {order.id} with {order.destination_position} is stored in cell ({i}, {j})")
+    
+    # ----------------------------------------------------------------------------------------------
     
     def select_orders(self, latitude: float, longitude: float, capacity: int) -> list[DeliveryOrder]:
         if self.__prev_order_selection is not None \
@@ -141,6 +149,8 @@ class OrdersMatrix:
         
         return orders
     
+    # ----------------------------------------------------------------------------------------------
+    
     def remove_orders(self, *, orders: list[DeliveryOrder]) -> None:
         """
         Remove orders from the matrix.
@@ -154,6 +164,8 @@ class OrdersMatrix:
         
         self.remove_orders(orders_id=orders_id)
         
+    # ----------------------------------------------------------------------------------------------    
+    
     def remove_orders(self, *, orders_id: list[str]) -> None:
         """
         Remove orders from the matrix.

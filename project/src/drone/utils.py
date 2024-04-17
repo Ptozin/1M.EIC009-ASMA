@@ -62,22 +62,20 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
 
 # ---------------------------------------------------------------------------------------------
 
-def calculate_travel_time(path : list[DeliveryOrder], velocity : float) -> float:
+def calculate_travel_distance(path : list[DeliveryOrder]) -> float:
     if len(path) < 2:
         return 0.0
-    total_time = 0.0
+    total_distance = 0.0
     for i in range(len(path) - 1):
         start = path[i]
         end = path[i + 1]
-        distance = haversine_distance(
+        total_distance += haversine_distance(
             start.destination_position['latitude'], 
             start.destination_position['longitude'], 
             end.destination_position['latitude'], 
             end.destination_position['longitude']
         )
-        travel_time = distance / velocity
-        total_time += travel_time
-    return total_time
+    return total_distance
 
 # ---------------------------------------------------------------------------------------------
 
@@ -88,7 +86,8 @@ def calculate_capacity_level(orders: list[DeliveryOrder], max_capacity: int) -> 
 
 # ---------------------------------------------------------------------------------------------
 
-def utility(travel_time : float, capacity_level : float) -> float:
+def utility(travel_distance : float, velocity : float, capacity_level : float) -> float:
+    travel_time = travel_distance / velocity
     time_k = 0.1
     capacity_k = 2.0
     if travel_time <= 0:
@@ -122,12 +121,64 @@ def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitud
     for order_set in order_sets:
         first_order = closest_order(latitude, longitude, order_set)
         path = generate_path(order_set, first_order)
-        travel_time = calculate_travel_time(path, velocity)
+        travel_distance = calculate_travel_distance(path)
         capacity_level = calculate_capacity_level(order_set, capacity)
-        set_utility = utility(travel_time, capacity_level)
+        set_utility = utility(travel_distance, velocity, capacity_level)
         if set_utility > best_utility:
             best_set = order_set
             best_utility = set_utility
     return best_set
+
+# ----------------------------------------------------------------------------------------------
+
+def best_order_decision(agent) -> str:
+    orders = agent.next_orders
+    path = generate_path(orders)
+        
+    closest = closest_order(agent.position["latitude"], agent.position["longitude"], orders)
+    distance_closest_order = haversine_distance(
+        agent.position["latitude"], 
+        agent.position["longitude"], 
+        closest.destination_position['latitude'], 
+        closest.destination_position['longitude']
+    )
+    travel_distance = distance_closest_order + calculate_travel_distance(path)
+        
+    capacity_level = calculate_capacity_level(orders, agent.params.max_capacity)
+    drone_utility = utility(travel_distance, agent.params.velocity, capacity_level)
+    winner = None
+        
+    for warehouse, orders in agent.available_order_sets.items():
+        orders = agent.next_orders + orders
+        path = generate_path(orders)
+            
+        distance_warehouse = haversine_distance(
+            agent.position["latitude"], 
+            agent.position["longitude"], 
+            agent.warehouse_positions[warehouse]['latitude'], 
+            agent.warehouse_positions[warehouse]['longitude']
+        )
+        closest = closest_order(
+            agent.warehouse_positions[warehouse]['latitude'], 
+            agent.warehouse_positions[warehouse]['longitude'], 
+            orders
+        )
+        distance_warehouse_to_closest_order = haversine_distance(
+            agent.warehouse_positions[warehouse]['latitude'], 
+            agent.warehouse_positions[warehouse]['longitude'], 
+            closest.destination_position['latitude'], 
+            closest.destination_position['longitude']
+        )
+        travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
+            
+        orders += agent.next_orders
+        capacity_level = calculate_capacity_level(orders, agent.params.max_capacity)
+        new_utility = utility(travel_distance, agent.params.velocity, capacity_level)
+            
+        if new_utility > drone_utility:
+            winner = warehouse
+            drone_utility = new_utility  
+    
+    return winner
 
 # ----------------------------------------------------------------------------------------------
