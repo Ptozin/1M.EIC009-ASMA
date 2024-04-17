@@ -133,11 +133,16 @@ class OrdersMatrix:
             # Calculate the weight of orders in the current cell
             cell_weight = sum(order.weight for order in cell_orders)
             
-            orders.extend(cell_orders)
             
             # If adding orders from this cell exceeds the total capacity, stop traversal
             if total_weight + cell_weight > total_orders_capacity:
+                for order in cell_orders:
+                    if order.weight + total_weight < total_orders_capacity:
+                        orders.append(order)
+                        total_weight += order.weight
                 break
+            else:
+                orders.extend(cell_orders)
             
             # Add orders from this cell to the list of retrieved orders
             total_weight += cell_weight
