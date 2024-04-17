@@ -58,6 +58,27 @@ class DroneAgent(Agent):
         
     # ----------------------------------------------------------------------------------------------
 
+    def arrived_at_next_order(self):
+        """
+        Method to verify if the drone has arrived at the next order's destination.
+        
+        Returns:
+            bool: True if the drone has arrived at the next order's destination, False otherwise.
+        """
+        return self.position["latitude"] == self.next_order.destination_position["latitude"] \
+           and self.position["longitude"] == self.next_order.destination_position["longitude"]
+           
+    def arrived_at_next_warehouse(self):
+        """
+        Method to verify if the drone has arrived at the next warehouse.
+        
+        Returns:
+            bool: True if the drone has arrived at the next warehouse, False otherwise.
+        """
+        return self.position["latitude"] == self.warehouse_positions[self.next_warehouse]["latitude"] \
+           and self.position["longitude"] == self.warehouse_positions[self.next_warehouse]["longitude"]
+        
+
     def any_warehouse_available(self) -> bool:
         """
         Method to check if there are any warehouses available.

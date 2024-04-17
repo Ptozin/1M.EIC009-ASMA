@@ -117,10 +117,15 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 message = Message()
                 message.to = warehouse + "@localhost"
                 if warehouse == winner:
-                    self.agent.next_orders += self.agent.available_order_sets[warehouse]
+                    # TODO: Add orders to drone only on the PickupBehaviour
+                    # self.agent.next_orders += self.agent.available_order_sets[warehouse]
+                    self.agent.orders_to_be_picked[warehouse] = self.agent.available_order_sets[warehouse]
                     self.agent.next_warehouse = warehouse
                     message.set_metadata("performative", "agree")
-                    message.body = self.agent.available_order_sets[winner]
+                    
+                    orders = [order.__repr__() for order in self.agent.available_order_sets[winner]]
+                    
+                    message.body = json.dumps(orders)
                 else:
                     message.set_metadata("performative", "refuse")
                 await self.send(message)
@@ -157,7 +162,7 @@ class DeliverBehaviour(PeriodicBehaviour):
                 position['longitude']
             )
             self.agent.position = position
-            if self.agent.arrived_to_target(next_order_lat, next_order_lon):
+            if self.agent.arrived_at_next_order():
                 self.agent.drop_order(self.agent.next_order)
                 self.kill()
             else:
@@ -198,9 +203,7 @@ class ReturnBehaviour(PeriodicBehaviour):
             position['longitude']
         )
         self.agent.position = position
-        if self.agent.arrived_to_target(next_warehouse_lat, next_warehouse_lon):
-            self.agent.params.curr_autonomy = self.agent.params.max_autonomy
-            self.agent.next_warehouse = None
+        if self.agent.arrived_at_next_warehouse():
             self.kill(exit_code=RETURNED)
         else:
             self.agent.logger.log("[RETURNING] {} - Distance to warehouse: {} meters"\
@@ -220,13 +223,12 @@ class ReturnBehaviour(PeriodicBehaviour):
             await self.agent.stop()
         elif self.exit_code == RETURNED:
             self.agent.logger.log(f"[RETURNED] {self.agent.params.id}")
-            self.agent.add_behaviour(AvailableBehaviour())
+            self.agent.add_behaviour(PickUpOrdersBehaviour())
 
 # ----------------------------------------------------------------------------------------------
 
 class PickUpOrdersBehaviour(OneShotBehaviour):
     async def run(self):
-        # TODO: Implement this behaviour
         message = Message()
         message.to = self.agent.next_warehouse + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, ORDER_PICKUP)
@@ -243,7 +245,11 @@ class PickUpOrdersBehaviour(OneShotBehaviour):
             self.kill(exit_code=ERROR)
         else:
             self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - {response.sender}")
-            ... # update the agent's orders
+            
+            # If the warehouse agrees to deliver the orders...
+            if response.metadata["performative"] == "agree":
+                self.agent.next_orders += self.agent.available_order_sets[self.agent.next_warehouse]
+
         
     async def on_end(self):
         if self.exit_code == ERROR:

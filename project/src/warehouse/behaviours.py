@@ -151,14 +151,17 @@ class OrdersPickupBehaviour(OneShotBehaviour):
         self.sender = str(message.sender)
     
     async def run(self):
-        # TODO: DO NOT AWAIT FOR MESSAGES, USE IDLE BEHAVIOUR AND PROCESS MESSAGE HERE
         if self.message is None:
             self.kill(exit_code=ERROR)
+            return
         
         orders = json.loads(self.message.body)
         
         for order in orders:
             # assuming that there is never a race condition
+            if order['id'] not in self.orders_to_be_picked:
+                self.kill(exit_code=ERROR)
+                return
             self.orders_to_be_picked.remove(order["id"])
         
         self.agent.logger.log("[PICKUP] {} orders picked up by drone - {}"\
@@ -185,6 +188,8 @@ class RechargeDroneBehaviour(OneShotBehaviour):
     async def run(self):
         if self.message is None:
             self.kill(exit_code=ERROR)
+            return
+        
         answer = Message()
         answer.to = self.sender
         if self.message.metadata["performative"] == "request":
