@@ -48,6 +48,7 @@ class DroneAgent(Agent):
         self.socketio = socketio
         self.orders_to_visualize : list[DeliveryOrder] = []
         
+        self.need_to_stop = False
         
         self.warehouses_responses = []
         
@@ -97,6 +98,11 @@ class DroneAgent(Agent):
         self.params.curr_autonomy = self.params.max_autonomy
 
     def update_position(self, target_latitude : float, target_longitude : float) -> None:
+        self.logger.log("[DELIVERING] - Distance to target: {} meters"\
+            .format(round(haversine_distance(
+                        self.position['latitude'], self.position['longitude'], 
+                        target_latitude, target_longitude), 2)))
+        
         position = next_position(
             self.position['latitude'], self.position['longitude'],
             target_latitude, target_longitude,
@@ -112,7 +118,6 @@ class DroneAgent(Agent):
         
         if self.params.curr_autonomy < 0:
             self.logger.log(f"Drone out of battery")
-            raise Exception("Drone out of battery")
         
 
     def arrived_at_next_order(self):
@@ -205,6 +210,7 @@ class DroneAgent(Agent):
         """
         
         order = self.next_orders.pop(0) 
+        self.logger.log("[DELIVERING] - Order {} delivered".format(order.id))
         self.params.drop_order(order.weight)
         # Only append the order to the total orders list if it has been delivered
         self.total_orders.append(order)

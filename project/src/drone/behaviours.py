@@ -46,7 +46,7 @@ class FSMBehaviour(FSMBehaviour):
 
     async def on_end(self):
         print(f"FSM finished at state {self.current_state}")
-        
+        self.agent.need_to_stop = True
         orders_id = [order.id for order in self.agent.total_orders]
         
         self.agent.logger.log(self.agent.params.metrics(orders_id=orders_id))
@@ -143,14 +143,7 @@ class PickupOrdersBehaviour(State):
     async def run(self):
         while not self.agent.arrived_at_next_warehouse():
             next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
-            
-            self.agent.logger.log("[RETURNING] - Distance to warehouse: {} meters"\
-                .format(round(haversine_distance(
-                            self.agent.position['latitude'], self.agent.position['longitude'], 
-                            next_warehouse_lat, next_warehouse_lon), 2)))
-            
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
-            
             await asyncio.sleep(INTERVAL_BETWEEN_TICKS)
         
         # ----
@@ -197,20 +190,10 @@ class DeliverOrdersBehaviour(State):
         while self.agent.has_inventory():
             while not self.agent.arrived_at_next_order():
                 next_order_lat, next_order_lon = self.agent.get_next_order_position()
-                
-                self.agent.logger.log("[DELIVERING] - Distance to order: {} meters"\
-                    .format(round(haversine_distance(
-                                self.agent.position['latitude'], self.agent.position['longitude'], 
-                                next_order_lat, next_order_lon), 2)))
-                
                 self.agent.update_position(next_order_lat, next_order_lon)
-                
                 await asyncio.sleep(INTERVAL_BETWEEN_TICKS)
         
-            # ----
             # If the drone has arrived at the order's destination, then it should deliver the order
-            
-            self.agent.logger.log("[DELIVERING] - Order {} delivered".format(self.agent.next_order.id))
             self.agent.drop_order()
         
         self.set_next_state(STATE_AVAILABLE)
@@ -225,6 +208,9 @@ class DeadBehaviour(State):
 
 class EmitPositionBehaviour(PeriodicBehaviour):
     async def run(self):
+        if self.agent.need_to_stop:
+            self.kill()
+            return
         data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
         data.append({
             'id': self.agent.params.id,

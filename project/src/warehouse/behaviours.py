@@ -138,7 +138,7 @@ class DismissBehaviour(CyclicBehaviour):
         else:
             self.agent.logger.log(f"[REFUSING] - [MESSAGE] {str(message.sender)}")
             message = Message(to=str(message.sender))
-            message.set_metadata("performative", "refuse-proposal")
+            message.set_metadata("performative", "refuse")
             await self.send(message)
         
 # ----------------------------------------------------------------------------------------------
