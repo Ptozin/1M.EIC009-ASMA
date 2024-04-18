@@ -1,12 +1,10 @@
-# ----------------------------------------------------------------------------------------------
-
-import datetime
-from spade.behaviour import OneShotBehaviour, PeriodicBehaviour, CyclicBehaviour
+from spade.behaviour import OneShotBehaviour, PeriodicBehaviour, CyclicBehaviour, FSMBehaviour, State
 from spade.message import Message
-
-from drone.utils import *
-from misc.distance import haversine_distance, next_position
 import json
+
+from order import DeliveryOrder
+from drone.utils import best_available_orders
+from misc.distance import next_position
 
 # ----------------------------------------------------------------------------------------------
 
@@ -21,273 +19,125 @@ ERROR = 60
 # ---
 
 SUGGEST_ORDER = "suggest"
+DECIDE = "decide"
 ORDER_PICKUP = "pickup_orders"
 RECHARGE_DRONE = "recharge"
 
+
 METADATA_NEXT_BEHAVIOUR = "next_behaviour"
+
+# ---
+
+STATE_AVAILABLE = "available"
+STATE_SUGGEST = "suggest"
+STATE_PICKUP = "pickup"
+STATE_RECHARGE = "recharge"
+STATE_DELIVER = "deliver"
 
 # ----------------------------------------------------------------------------------------------
 
-class AvailableBehaviour(OneShotBehaviour):
+class FSMBehaviour(FSMBehaviour):
     async def on_start(self):
-        self.responses = []
+        print(f"FSM starting at initial state {self.current_state}")
 
+    async def on_end(self):
+        print(f"FSM finished at state {self.current_state}")
+        self.agent.logger.log(self.agent.params.metrics())
+        # self.agent.params.store_results()
+        await self.agent.stop()
+
+class AvailableBehaviour(State):
     async def run(self):
+        self.warehouses_responses = []
+        
         for warehouse in self.agent.warehouse_positions.keys():
             message = Message()
             message.to = warehouse + "@localhost"
             message.body = self.agent.__repr__()
             message.set_metadata("performative", "inform")
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
-            await self.send(message)
-            response = await self.receive(timeout=5)
-            self.responses.append(response)
-            
-    async def on_end(self):
-        self.agent.add_behaviour(OrderSuggestionsBehaviour(self.responses))
+            tries = 3
+            while tries > 0:
+                tries -= 1
+                await self.send(message)
+                response = await self.receive(timeout=5)
+                if response is not None:
+                    self.agent.warehouses_responses.append(response)
+                    break
         
-# ----------------------------------------------------------------------------------------------
+        print(f"[AVAILABLE] - {self.agent.warehouses_responses}")
+        self.set_next_state(STATE_SUGGEST)
 
-class OrderSuggestionsBehaviour(CyclicBehaviour):
-    def __init__(self, messages : list[Message]):
-        super().__init__()
-        self.messages = messages
-
-    async def on_start(self):
+class OrderSuggestionsBehaviour(State):
+    async def start(self) -> None:
         self.agent.available_order_sets = {}
     
     async def run(self):
-        if len(self.agent.available_order_sets) == len(self.agent.warehouse_positions):
-            self.kill(exit_code=DECIDING)
+        responses = self.agent.warehouses_responses
+        if responses == []:
+            print("ERROR - No responses from warehouses")
         
-        for message in self.messages:
-            if message is None:
-                self.kill(exit_code=ERROR)
-                return
-            
-            if message.metadata["performative"] == "propose":
-                proposed_orders = json.loads(message.body)
+        for response in responses:
+            print(f"[RESPONSE] - {response.metadata}")
+            if response.metadata["performative"] == "propose":
+                self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
+                proposed_orders = json.loads(response.body)
                 orders = []
                 for order in proposed_orders:
                     order = json.loads(order)
                     orders.append(DeliveryOrder(**order))
-                    
-                order_choices = best_available_orders(
-                    orders, 
-                    self.agent.position["latitude"], 
-                    self.agent.position["longitude"], 
-                    self.agent.params.max_capacity, 
-                    self.agent.params.velocity
-                )
-                self.agent.available_order_sets[str(message.sender).split("@")[0]] = order_choices
-                
-            elif message.metadata["performative"] == "refuse-proposal":
-                self.agent.logger.log(f"[REFUSED] {self.agent.params.id} - {str(message.sender)}")
-                self.agent.remove_warehouse(str(message.sender).split("@")[0])
-                
-                if not self.agent.any_warehouse_available():
-                    self.kill(exit_code=DISMISSED)
-                    return
-            
-    async def on_end(self):
-        if self.exit_code == ERROR:
-            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No response from warehouse. Self Destruction activated.")
-            await self.agent.stop()
-        elif self.exit_code == DECIDING:
-            self.agent.add_behaviour(DecideOrdersBehaviour())
-        elif self.exit_code == DISMISSED:
-            self.agent.logger.log(self.agent.params.metrics())
-            self.agent.params.store_results()
-            await self.agent.stop()
-            
-# ----------------------------------------------------------------------------------------------
-
-class DecideOrdersBehaviour(OneShotBehaviour):
-    async def run(self):
-        winner = self.agent.best_order_decision()
-        if winner is None:
-            for warehouse in self.agent.warehouse_positions.keys():
-                message = Message()
-                message.to = warehouse + "@localhost"
-                message.set_metadata("performative", "refuse-proposal")
-                await self.send(message)
-            self.kill(exit_code=DELIVERING)
-        else:
-            for warehouse in self.agent.warehouse_positions.keys():
-                message = Message()
-                message.to = warehouse + "@localhost"
-                if warehouse == winner:
-                    # TODO: Add orders to drone only on the PickupBehaviour
-                    # self.agent.next_orders += self.agent.available_order_sets[warehouse]
-                    self.agent.orders_to_be_picked[warehouse] = self.agent.available_order_sets[warehouse]
-                    self.agent.next_warehouse = warehouse
-                    message.set_metadata("performative", "agree-proposal")
-                    
-                    orders = [order.__repr__() for order in self.agent.available_order_sets[winner]]
-                    
-                    message.body = json.dumps(orders)
-                else:
-                    message.set_metadata("performative", "refuse-proposal")
-                await self.send(message)
-            self.kill(exit_code=RETURNING)
-            
-    async def on_end(self):
-        if self.exit_code == DELIVERING:
-            self.agent.add_behaviour(DeliverBehaviour(period=1.0))
-        elif self.exit_code == RETURNING:
-            self.agent.add_behaviour(ReturnBehaviour(period=1.0))
-
-# ----------------------------------------------------------------------------------------------
-
-class DeliverBehaviour(PeriodicBehaviour):
-    async def run(self):
-        if len(self.agent.next_orders) == 0:
-            self.kill()
-        else:
-            if self.agent.next_order is None:
-                self.agent.next_order = self.agent.next_orders[0]
-            next_order_lat = self.agent.next_order.destination_position['latitude']
-            next_order_lon = self.agent.next_order.destination_position['longitude']
-            position = next_position(
-                    self.agent.position['latitude'],
-                    self.agent.position['longitude'],
-                    next_order_lat,
-                    next_order_lon,
-                    self.agent.params.velocity * TIME_MULTIPLIER
-                )
-            self.agent.params.curr_autonomy -= haversine_distance(
-                self.agent.position['latitude'],
-                self.agent.position['longitude'],
-                position['latitude'],
-                position['longitude']
-            )
-            self.agent.position = position
-            if self.agent.arrived_at_next_order():
-                self.agent.drop_order(self.agent.next_order)
-                self.kill()
-            else:
-                self.agent.logger.log("[DELIVERING] {} - {} meters to next drop-off"\
-                    .format(str(self.agent), 
-                            round(
-                                haversine_distance(
-                                    self.agent.position['latitude'], 
-                                    self.agent.position['longitude'], 
-                                    next_order_lat, 
-                                    next_order_lon
-                                ), 2
-                            ))
+                    order_choices = best_available_orders(
+                        orders, 
+                        self.agent.position["latitude"], 
+                        self.agent.position["longitude"], 
+                        self.agent.params.max_capacity, 
+                        self.agent.params.velocity
                     )
-    
-    async def on_end(self):
-        self.agent.add_behaviour(AvailableBehaviour())
-            
-# ----------------------------------------------------------------------------------------------
-
-class ReturnBehaviour(PeriodicBehaviour):
+                    
+                self.agent.available_order_sets[str(response.sender).split("@")[0]] = order_choices
+            elif response.metadata["performative"] == "refuse":
+                # This means that the warehouse has no orders to suggest
+                self.agent.logger.log(f"[REFUSED] - {str(response.sender)}")
+                self.agent.remove_warehouse(str(response.sender).split("@")[0])
+                
+        # ----
+        
+        # If there are none, then there aren't available warehouses, so the drone should kiss the ground
+        if len(self.agent.available_order_sets) > 0:
+            winner, orders = self.agent.best_orders()
+            print(f"[SUGGEST] - {winner} - {orders}")
+            # For now, ignore the case where there is no winner
+            if winner is not None:
+                for warehouse in self.agent.available_order_sets.keys():
+                    message = Message()
+                    message.to = warehouse + "@localhost"
+                    message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
+                    
+                    if warehouse == winner:
+                        message.set_metadata("performative", "accept-proposal")
+                        message.body = json.dumps([order.__repr__() for order in orders])
+                        self.agent.next_warehouse = warehouse
+                        await self.send(message)
+                    else:
+                        message.set_metadata("performative", "reject-proposal")                        
+                        await self.send(message)
+                
+                # TODO: This may not be the case, but for now we will assume that it is the best choice
+                self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+                self.set_next_state(ORDER_PICKUP)
+                
+class PickupOrdersBehaviour(State):
     async def run(self):
-        if not self.agent.any_warehouse_available():
-            self.kill(exit_code=ERROR)
-            return 
+        # TODO: Now it includes the first stage of returning to the warehouse
+        # Only at the end it sends a message to pickup
+        ...
         next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
         position = next_position(
-                self.agent.position['latitude'],
-                self.agent.position['longitude'],
-                next_warehouse_lat,
-                next_warehouse_lon,
+                self.agent.position['latitude'], self.agent.position['longitude'],
+                next_warehouse_lat, next_warehouse_lon,
                 self.agent.params.velocity * TIME_MULTIPLIER
             )
-        self.agent.params.curr_autonomy -= haversine_distance(
-            self.agent.position['latitude'],
-            self.agent.position['longitude'],
-            position['latitude'],
-            position['longitude']
-        )
-        self.agent.position = position
-        if self.agent.arrived_at_next_warehouse():
-            self.kill(exit_code=RETURNED)
-        else:
-            self.agent.logger.log("[RETURNING] {} - Distance to warehouse: {} meters"\
-                .format(self.agent.params.id, 
-                        round(haversine_distance(
-                            self.agent.position['latitude'], 
-                            self.agent.position['longitude'], 
-                            next_warehouse_lat,
-                            next_warehouse_lon
-                        ), 2
-                    ))
-                )
-    
-    async def on_end(self):
-        if self.exit_code == ERROR:
-            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No warehouse available to return to. Self Destruction activated.")
-            await self.agent.stop()
-        elif self.exit_code == RETURNED:
-            self.agent.logger.log(f"[RETURNED] {self.agent.params.id}")
-            self.agent.add_behaviour(PickUpOrdersBehaviour())
-
-# ----------------------------------------------------------------------------------------------
-
-class PickUpOrdersBehaviour(OneShotBehaviour):
-    async def run(self):
-        message = Message()
-        message.to = self.agent.next_warehouse + "@localhost"
-        message.set_metadata(METADATA_NEXT_BEHAVIOUR, ORDER_PICKUP)
         
-        orders_id = [order.id for order in self.agent.next_orders]
-        
-        message.body = json.dumps(orders_id)
-        
-        print(f"[PICKUP] {self.agent.params.id} - {message.to}")
-        
-        await self.send(message)
-        
-        response = await self.receive(timeout=5)
-        if response is None:
-            self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - No response from warehouse. Self Destruction activated.")
-            self.kill(exit_code=ERROR)
-        else:
-            self.agent.logger.log(f"[PICKUP] {self.agent.params.id} - {response.sender}")
-            
-            # If the warehouse agrees to deliver the orders...
-            if response.metadata["performative"] == "agree-proposal":
-                self.agent.next_orders += self.agent.available_order_sets[self.agent.next_warehouse]
-
-        
-    async def on_end(self):
-        if self.exit_code == ERROR:
-            await self.agent.stop()
-        else:
-            self.agent.add_behaviour(RechargeBehaviour())
-        
-# ----------------------------------------------------------------------------------------------
-
-class RechargeBehaviour(OneShotBehaviour):
-    async def run(self):
-        message = Message()
-        message.to = self.agent.next_warehouse + "@localhost"
-        message.set_metadata("performative", "request")
-        message.set_metadata(METADATA_NEXT_BEHAVIOUR, RECHARGE_DRONE)
-        await self.send(message)
-        
-        response = await self.receive(timeout=5)
-        
-        if response is None:
-            self.agent.logger.log(f"[ERROR] {self.agent.params.id} - No response from warehouse to recharge. Self Destruction activated.")
-            self.kill(exit_code=ERROR)
-        else:
-            if response.metadata["performative"] == "refuse-proposal":
-                self.agent.logger.log(f"[ERROR] {self.agent.params.id} - Warehouse {response.sender} refused to recharge drone. Self Destruction activated.")
-                self.kill(exit_code=ERROR)
-            elif response.metadata["performative"] == "agree-proposal":
-                self.agent.logger.log(f"[RECHARGE] {self.agent.params.id} at Warehouse {response.sender}")
-                self.agent.params.refill_autonomy()
-                self.kill()
-
-    async def on_end(self):
-        if self.exit_code == ERROR:
-            await self.agent.stop()
-        else:
-            self.agent.add_behaviour(DeliverBehaviour(period=1.0))
 
 # ----------------------------------------------------------------------------------------------
 
@@ -304,30 +154,7 @@ class EmitPositionBehaviour(PeriodicBehaviour):
             'orders_delivered': self.agent.params.orders_delivered,
             'type': 'drone'
         })        
-        self.agent.socketio.emit(
-            'update_data', 
-            data
-        )
+        self.agent.socketio.emit('update_data', data)
         self.agent.orders_to_visualize = []
-        
-# ----------------------------------------------------------------------------------------------
-        
-class EmitSetupBehaviour(OneShotBehaviour):
-    async def run(self):
-        self.agent.socketio.emit(
-            'update_data', 
-            [
-                {
-                    'id': self.agent.params.id,
-                    'latitude': self.agent.position['latitude'],
-                    'longitude': self.agent.position['longitude'],
-                    'type': 'drone'
-                }
-            ]
-        )
-        
-    async def on_end(self) -> None:
-        self.agent.add_behaviour(EmitPositionBehaviour(period=1.0))
-        self.agent.add_behaviour(AvailableBehaviour())
             
 # ----------------------------------------------------------------------------------------------

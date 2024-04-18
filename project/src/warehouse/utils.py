@@ -30,9 +30,6 @@ class OrdersMatrix:
         
         self.matrix : np.array = np.empty((self.divisions, self.divisions), dtype=object)
         
-        self.__prev_order_selection : list[DeliveryOrder] = None
-        self.__prev_coordinates = {"latitude": 0, "longitude": 0}
-        
         for i in range(self.divisions):
             for j in range(self.divisions):
                 self.matrix[i, j] = []
@@ -97,10 +94,6 @@ class OrdersMatrix:
     # ----------------------------------------------------------------------------------------------
     
     def select_orders(self, latitude: float, longitude: float, capacity: int) -> list[DeliveryOrder]:
-        if self.__prev_order_selection is not None \
-            and latitude == self.__prev_coordinates["latitude"] \
-            and longitude == self.__prev_coordinates["longitude"]:
-            return self.__prev_order_selection
         # Calculate the cell index for the order
         i, j = self.calculate_cell_index(latitude, longitude)
         
@@ -156,11 +149,23 @@ class OrdersMatrix:
                     queue.append((nx, ny))
                     visited.add((nx, ny))
         
-        # Store the previous order selection and coordinates
-        self.__prev_order_selection = orders
-        self.__prev_coordinates = {"latitude": latitude, "longitude": longitude}
-        
         return orders
+    
+    # ----------------------------------------------------------------------------------------------
+
+    def reserve_order(self, lat : float, long : float, order_id : str) -> None:
+        """
+        Reserve an order in the matrix.
+        Only called when a Drone accepts an offer made by the warehouse.
+
+        Args:
+            lat (float): The latitude of the order to be reserved.
+            long (float): The longitude of the order to be reserved.
+            order_id (str): The id of the order to be reserved.
+        """
+        
+        i, j = self.calculate_cell_index(lat, long)
+        self.matrix[i, j] = [order for order in self.matrix[i, j] if order.id != order_id]
     
     # ----------------------------------------------------------------------------------------------
     
@@ -191,8 +196,5 @@ class OrdersMatrix:
         for i in range(self.divisions):
             for j in range(self.divisions):
                 self.matrix[i, j] = [order for order in self.matrix[i, j] if order.id not in orders_id]
-                
-        self.__prev_order_selection = None
-        self.__prev_coordinates = {"latitude": 0, "longitude": 0}
 
 # ----------------------------------------------------------------------------------------------

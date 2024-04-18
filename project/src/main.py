@@ -36,7 +36,7 @@ def main() -> None:
     server_thread.daemon = True
     server_thread.start()
     # Wait for the server to start
-    # sleep(3)
+    sleep(2)
     
     # Setup delivery logic
     DeliveryLogic(delivery_drones, warehouses, web_app.socketio)

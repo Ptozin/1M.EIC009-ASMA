@@ -5,7 +5,7 @@ from flask_socketio import SocketIO
 
 from order import DeliveryOrder
 from misc.log import Logger
-from warehouse.behaviours import EmitSetupBehaviour, IdleBehaviour
+from warehouse.behaviours import EmitSetupBehaviour, SetupOrdersMatrixBehaviour, IdleBehaviour
 from warehouse.utils import OrdersMatrix
             
 # ----------------------------------------------------------------------------------------------
@@ -21,7 +21,6 @@ class WarehouseAgent(Agent):
             "longitude": longitude
         } 
         self.inventory : dict[DeliveryOrder]= {}
-        self.orders_to_be_picked : list[str] = []
 
         for order in orders:
             self.inventory[order["id"]] = DeliveryOrder(
@@ -33,16 +32,19 @@ class WarehouseAgent(Agent):
                 order["weight"]
             )
         
+        # See if we can get rid of this
+        self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
         self.curr_drone : str | None = None
+
 
         self.logger = Logger(filename=id)
         self.socketio = socketio
-        
         self.orders_matrix : OrdersMatrix = None
 
     async def setup(self) -> None:
         self.logger.log(f"{self.id} - [SETUP]")
         self.add_behaviour(IdleBehaviour())
         self.add_behaviour(EmitSetupBehaviour())
+        self.add_behaviour(SetupOrdersMatrixBehaviour())
 
 # ----------------------------------------------------------------------------------------------

@@ -4,3 +4,4 @@ pandas
 flask
 requests
 flask-socketio
+ipykernel

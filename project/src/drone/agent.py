@@ -6,9 +6,18 @@ from spade.agent import Agent
 from order import DeliveryOrder
 from drone.parameters import DroneParameters
 from misc.log import Logger
-from drone.behaviours import EmitSetupBehaviour
+from drone.behaviours import *
 from drone.utils import *
 from flask_socketio import SocketIO
+
+# ----------------------------------------------------------------------------------------------
+
+STATE_AVAILABLE = "available"
+STATE_SUGGEST = "suggest"
+STATE_PICKUP = "pickup"
+STATE_RECHARGE = "recharge"
+STATE_DELIVER = "deliver"
+
 
 # ----------------------------------------------------------------------------------------------
 
@@ -33,17 +42,28 @@ class DroneAgent(Agent):
         } 
         
         self.params = DroneParameters(id, capacity, autonomy, velocity)
-        
         self.logger = Logger(filename = id)
         self.socketio = socketio
         self.orders_to_visualize : list[DeliveryOrder] = []
+        
+        
+        self.warehouses_responses = []
         
     async def setup(self) -> None:
         """
         Agent's setup method. It adds the IdleBehav behaviour.
         """
-        print(f"{self.params.id} - [SETUP]")
-        self.add_behaviour(EmitSetupBehaviour())
+        self.logger.log(f"{self.params.id} - [SETUP]")
+        self.add_behaviour(EmitPositionBehaviour(period=1.0))
+        fsm = FSMBehaviour()
+        fsm.add_state(name=STATE_AVAILABLE, state=AvailableBehaviour(), initial=True)
+        fsm.add_state(name=STATE_SUGGEST, state=OrderSuggestionsBehaviour())
+        fsm.add_state(name=STATE_PICKUP, state=PickupOrdersBehaviour())
+        fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_SUGGEST)
+        fsm.add_transition(source=STATE_SUGGEST, dest=STATE_PICKUP)
+        self.add_behaviour(fsm)
+        
+        
 
     def __str__(self) -> str:
         return str(self.params)
@@ -137,7 +157,28 @@ class DroneAgent(Agent):
 
 # ----------------------------------------------------------------------------------------------
 
+    def best_orders(self) -> tuple[str, list[DeliveryOrder]]:
+        """
+        Method to select the best orders for the drone from the available warehouses.
+
+        Returns:
+            tuple[str, list[DeliveryOrder]]: The warehouse id and the list of orders to pick up.
+        """
+        # For now, choose a random warehouse and the first N orders to fill the drone's capacity
+        warehouse : str = list(self.available_order_sets.keys())[0]
+        orders : list[DeliveryOrder] = []
+        curr_capacity = 0
+        for order in self.available_order_sets[warehouse]:
+            if curr_capacity + order.weight <= self.params.max_capacity:
+                orders.append(order)
+                curr_capacity += order.weight
+        
+        return warehouse, orders
+        
+        
+
     def best_order_decision(self) -> str:
+        # if winner is None, that means that it didn't receive any orders
         winner = None
         drone_utility = float('-inf')
         
@@ -156,7 +197,6 @@ class DroneAgent(Agent):
             capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
             drone_utility = utility(travel_distance, self.params.velocity, capacity_level)
             
-        # print available_order_sets
         print(f"{self.params.id} - [BEST ORDER DECISION] - {self.available_order_sets}")
         
         for warehouse, orders in self.available_order_sets.items():
