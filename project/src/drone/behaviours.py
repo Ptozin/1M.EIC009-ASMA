@@ -9,7 +9,6 @@ from misc.distance import haversine_distance, next_position
 
 # ----------------------------------------------------------------------------------------------
 
-TIME_MULTIPLIER = 500 # increases the speed per tick to 10km/s, with a base velocity of 20 m/s
 DECIDING = 10
 DISMISSED = 20
 DELIVERING = 30
@@ -17,7 +16,7 @@ RETURNING = 40
 RETURNED = 50
 ERROR = 60
 
-INTERVAL_BETWEEN_TICKS = 1.0
+INTERVAL_BETWEEN_TICKS = 0.2
 
 # ---
 
@@ -94,6 +93,8 @@ class OrderSuggestionsBehaviour(State):
                 self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
                 
                 #TODO: check, this can come in empty!!! Why though??
+                # ANSWER: all orders are reserved, but dosn't mean we can remove them
+                # thats what we are doing, so we good
                 proposed_orders = json.loads(response.body)
                 orders = []
                 for order in proposed_orders:
@@ -152,7 +153,6 @@ class PickupOrdersBehaviour(State):
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
             await asyncio.sleep(INTERVAL_BETWEEN_TICKS)
         
-        # ----
         # If the drone has arrived at the warehouse, then it should pick up the orders
         message = Message()
         message.to = self.agent.next_warehouse + "@localhost"

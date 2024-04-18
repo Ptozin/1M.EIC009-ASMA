@@ -18,7 +18,8 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 500.0
+TIME_MULTIPLIER = 50.0
+INTERVAL_BETWEEN_TICKS = 0.2
 
 
 # ----------------------------------------------------------------------------------------------
@@ -57,7 +58,7 @@ class DroneAgent(Agent):
         Agent's setup method. It adds the IdleBehav behaviour.
         """
         self.logger.log(f"{self.params.id} - [SETUP]")
-        self.add_behaviour(EmitPositionBehaviour(period=1.0))
+        self.add_behaviour(EmitPositionBehaviour(period=INTERVAL_BETWEEN_TICKS))
         fsm = FSMBehaviour()
         fsm.add_state(name=STATE_AVAILABLE, state=AvailableBehaviour(), initial=True)
         fsm.add_state(name=STATE_SUGGEST, state=OrderSuggestionsBehaviour())
