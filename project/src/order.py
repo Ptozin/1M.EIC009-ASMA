@@ -39,15 +39,32 @@ class DeliveryOrder:
         
         self.order_status : bool = STATUS["FREE"]
         
-    def update_order_status(self) -> None:
+    def mark_as_taken(self) -> None:
         """
-        Update the order status.
-        Used in different ways for the warehouse and the drone.
+        Mark the order as taken by a drone.
+        """
+        if self.order_status == STATUS["FREE"]:
+            self.order_status = STATUS["TAKEN"]
+        else:
+            raise Exception("Order is not available to be taken.")
+
+    def mark_as_delivered(self) -> None:
+        """
+        Mark the order as delivered by a drone.
+        """
+        if self.order_status == STATUS["TAKEN"]:
+            self.order_status = STATUS["DELIVERED"]
+        else:
+            raise Exception("Order cannot be delivered as it hasn't been taken.")
+
+    def is_available(self) -> bool:
+        """
+        Check if the order is available to be assigned to a drone.
         
-        Updates to DELIVERED when the order is delivered by the drone, on the drone side.
-        Updates to TAKEN when the order is taken by the drone, on the warehouse side.
+        Returns:
+            bool: True if the order is available, False otherwise.
         """
-        self.order_status = STATUS["DELIVERED"]
+        return self.order_status == STATUS["FREE"]
     
     def get_order_for_visualization(self) -> dict:
         """

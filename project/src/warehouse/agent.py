@@ -15,7 +15,7 @@ class WarehouseAgent(Agent):
         super().__init__(jid, password)
         self.id : str = id
         self.latitude : float = latitude
-        self.longitude : str = longitude
+        self.longitude : float = longitude
         self.position : dict = {
             "latitude": latitude,
             "longitude": longitude

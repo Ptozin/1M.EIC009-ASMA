@@ -132,8 +132,7 @@ class DroneAgent(Agent):
         self.next_orders.remove(order)
         self.next_order = None
 
-        # update order status on the total orders list
-        order.update_order_status()
+        order.mark_as_delivered()
         self.orders_to_visualize.append(order)
 
 # ----------------------------------------------------------------------------------------------

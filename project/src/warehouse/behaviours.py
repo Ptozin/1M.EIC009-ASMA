@@ -123,7 +123,7 @@ class HandleSuggestionsBehaviour(OneShotBehaviour):
                 orders_id = []
                 for order_str in orders:
                     order = json.loads(order_str)
-                    self.agent.inventory[order["id"]].update_order_status()
+                    self.agent.inventory[order["id"]].mark_as_taken()
                     self.agent.orders_to_be_picked.append(order["id"])
                     orders_id.append(order["id"])
                 
