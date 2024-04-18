@@ -42,16 +42,17 @@ STATE_DEAD = "dead"
 
 class FSMBehaviour(FSMBehaviour):
     async def on_start(self):
+        self.agent.logger.log(f"FSM starting at initial state {self.current_state}")
         print(f"FSM starting at initial state {self.current_state}")
 
     async def on_end(self):
+        self.agent.logger.log(f"FSM finished at state {self.current_state}")
         print(f"FSM finished at state {self.current_state}")
         self.agent.need_to_stop = True
         orders_id = [order.id for order in self.agent.total_orders]
         
         self.agent.logger.log(self.agent.params.metrics(orders_id=orders_id))
         # self.agent.params.store_results()
-        await self.agent.stop()
 
 # ----------------------------------------------------------------------------------------------
 
@@ -74,7 +75,7 @@ class AvailableBehaviour(State):
                 self.set_next_state(STATE_DEAD)
                 return
         
-        print(f"[AVAILABLE] - {len(self.agent.warehouses_responses)}")
+        # print(f"[AVAILABLE] - {len(self.agent.warehouses_responses)}")
         self.set_next_state(STATE_SUGGEST)
 
 # ----------------------------------------------------------------------------------------------
@@ -85,12 +86,14 @@ class OrderSuggestionsBehaviour(State):
         responses = self.agent.warehouses_responses
         if responses == []:
             print("ERROR - No responses from warehouses")
+            self.set_next_state(STATE_DEAD)
+            return
         
         for response in responses:
             if response.metadata["performative"] == "propose":
                 self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
                 
-                #TODO: check, this can come in empty!!!
+                #TODO: check, this can come in empty!!! Why though??
                 proposed_orders = json.loads(response.body)
                 orders = []
                 for order in proposed_orders:
@@ -212,6 +215,7 @@ class DeadBehaviour(State):
 class EmitPositionBehaviour(PeriodicBehaviour):
     async def run(self):
         data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
+        self.agent.orders_to_visualize = []
         data.append({
             'id': self.agent.params.id,
             'latitude': self.agent.position['latitude'],
@@ -223,10 +227,9 @@ class EmitPositionBehaviour(PeriodicBehaviour):
             'type': 'drone'
         })        
         self.agent.socketio.emit('update_data', data)
-        self.agent.orders_to_visualize = []
         
         if self.agent.need_to_stop:
             self.kill()
-            return
+            await self.agent.stop()
             
 # ----------------------------------------------------------------------------------------------
