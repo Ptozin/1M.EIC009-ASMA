@@ -67,11 +67,12 @@ class AvailableBehaviour(State):
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
             await self.send(message)
             response = await self.receive(timeout=5)
-            print(f"[RESPONSE] - FROM {str(response.sender)}")
             if response is not None:
                 self.agent.warehouses_responses.append(response)
             else:
-                print(f"[ERROR] - No response from {warehouse}")
+                self.agent.logger.log("[ERROR] - No response from warehouse")
+                self.set_next_state(STATE_DEAD)
+                return
         
         print(f"[AVAILABLE] - {len(self.agent.warehouses_responses)}")
         self.set_next_state(STATE_SUGGEST)
@@ -88,6 +89,8 @@ class OrderSuggestionsBehaviour(State):
         for response in responses:
             if response.metadata["performative"] == "propose":
                 self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
+                
+                #TODO: check, this can come in empty!!!
                 proposed_orders = json.loads(response.body)
                 orders = []
                 for order in proposed_orders:
@@ -100,8 +103,8 @@ class OrderSuggestionsBehaviour(State):
                         self.agent.params.max_capacity, 
                         self.agent.params.velocity
                     )
-                    
-                self.agent.available_order_sets[str(response.sender).split("@")[0]] = order_choices
+                if proposed_orders != []:
+                    self.agent.available_order_sets[str(response.sender).split("@")[0]] = order_choices
             elif response.metadata["performative"] == "refuse":
                 # This means that the warehouse has no orders to suggest
                 self.agent.logger.log(f"[REFUSED] - {str(response.sender)}")
@@ -202,15 +205,12 @@ class DeliverOrdersBehaviour(State):
 
 class DeadBehaviour(State):
     async def run(self):
-        self.agent.logger.log("[DEAD] - Drone out of battery")
+        self.agent.logger.log("[DEADBEHAVIOUR] - Drone out of battery or something like that")
 
 # ----------------------------------------------------------------------------------------------
 
 class EmitPositionBehaviour(PeriodicBehaviour):
     async def run(self):
-        if self.agent.need_to_stop:
-            self.kill()
-            return
         data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
         data.append({
             'id': self.agent.params.id,
@@ -224,5 +224,9 @@ class EmitPositionBehaviour(PeriodicBehaviour):
         })        
         self.agent.socketio.emit('update_data', data)
         self.agent.orders_to_visualize = []
+        
+        if self.agent.need_to_stop:
+            self.kill()
+            return
             
 # ----------------------------------------------------------------------------------------------

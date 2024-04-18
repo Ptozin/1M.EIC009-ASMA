@@ -67,6 +67,14 @@ class SuggestOrderBehaviour(OneShotBehaviour):
         orders : list[DeliveryOrder] = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
                                                               self.agent.position['longitude'], 
                                                               self.drone_capacity)
+        
+        # Reserve orders to drone
+        for order in orders:
+            self.agent.orders_matrix.reserve_order(order.destination_position["latitude"],
+                                                   order.destination_position["longitude"],
+                                                   order.id,
+                                                   self.sender)
+        
         message = Message()
         message.to = self.sender
         message.set_metadata("performative", "propose")
@@ -84,6 +92,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
     async def run(self):
         if self.message.metadata["performative"] == "accept-proposal":
             self.agent.logger.log(f"[DECIDING] - [ACCEPTED] - {self.sender}")
+            
             if self.sender not in self.agent.orders_to_be_picked:
                 self.agent.orders_to_be_picked[self.sender] = []
             # Reserve orders to drone
@@ -91,22 +100,25 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             print("Inventory size Before: {}".format(len(self.agent.inventory)))
             for order_str in orders:
                 order = json.loads(order_str)
-                latitude = order["dest_lat"]
-                longitude = order["dest_long"]
                 
                 # Remove order from matrix
-                self.agent.orders_matrix.reserve_order(latitude, longitude, order["id"])
+                self.agent.orders_matrix.remove_order(order["id"], self.sender)
                                 
-                # TODO: This can day in the next line if there is in fact concurrency     
-                # Remove order from inventory and add to orders to be picked
+                # TODO: This cant stay in the next line if there is in fact concurrency  
+                # ANSWER: Yup, there is   
                 self.agent.orders_to_be_picked[self.sender].append(self.agent.inventory[order["id"]])
                 del self.agent.inventory[order["id"]]
+                
+            # Undo reservations for orders the drone refused
+            self.agent.orders_matrix.undo_reservations(self.sender)
             
             print("Inventory size After: {}".format(len(self.agent.inventory)))
 
 
         elif self.message.metadata["performative"] == "reject-proposal":
             self.agent.logger.log(f"[DECIDING] - [REJECTED] - {self.sender}")
+            
+            self.agent.orders_matrix.undo_reservations(self.sender)
         
 # ----------------------------------------------------------------------------------------------
   

@@ -46,7 +46,7 @@ class DeliveryLogic:
 
         # Start the agents and pray they work as expected.
         spade.run(self.start_logic())
-
+        
     async def start_logic(self):
         for warehouse in self.warehouses:
             await warehouse.start()
@@ -58,10 +58,8 @@ class DeliveryLogic:
 
         for drone in self.delivery_drones:
             await spade.wait_until_finished(drone)
-        
-    def __exit__(self, exc_type, exc_value, traceback):
-        print("Exiting...")
+            
         for drone in self.delivery_drones:
-            drone.stop()
+            await drone.stop()
         for warehouse in self.warehouses:
-            warehouse.stop()
+            await warehouse.stop()

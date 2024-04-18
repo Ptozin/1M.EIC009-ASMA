@@ -30,6 +30,16 @@ class OrdersMatrix:
         
         self.matrix : np.array = np.empty((self.divisions, self.divisions), dtype=object)
         
+        """
+        The dictionary of reserved orders.
+        
+        {
+            "drone_X" : [order_1, order_2, ...],
+            ...
+        }
+        """
+        self.reserved_orders : dict[str, tuple] = {}
+        
         for i in range(self.divisions):
             for j in range(self.divisions):
                 self.matrix[i, j] = []
@@ -153,7 +163,7 @@ class OrdersMatrix:
     
     # ----------------------------------------------------------------------------------------------
 
-    def reserve_order(self, lat : float, long : float, order_id : str) -> None:
+    def reserve_order(self, lat : float, long : float, order_id : str, owner : str) -> None:
         """
         Reserve an order in the matrix.
         Only called when a Drone accepts an offer made by the warehouse.
@@ -165,36 +175,49 @@ class OrdersMatrix:
         """
         
         i, j = self.calculate_cell_index(lat, long)
-        self.matrix[i, j] = [order for order in self.matrix[i, j] if order.id != order_id]
-    
+        
+        for order in self.matrix[i, j]:
+            if order.id == order_id:
+                self.matrix[i, j].remove(order)
+                
+                if owner not in self.reserved_orders:
+                    self.reserved_orders[owner] = []
+                self.reserved_orders[owner].append((order, i, j))
+                break
+
     # ----------------------------------------------------------------------------------------------
     
-    def remove_orders(self, *, orders: list[DeliveryOrder]) -> None:
+    def remove_order(self, order_id : str, owner : str) -> None:
         """
-        Remove orders from the matrix.
-        Only called when a Drone accepts an offer made by the warehouse.
-        Clears the previous order selection.
+        Remove an order from the matrix.
+        Only called when a Drone delivers an order.
 
         Args:
-            orders (list[DeliveryOrder]): The list of orders to be removed.
+            order_id (str): The id of the order to be removed.
+            owner (str): The id of the owner of the order.
         """
-        orders_id = [order.id for order in orders]
         
-        self.remove_orders(orders_id=orders_id)
+        vals = self.reserved_orders[owner]
         
-    # ----------------------------------------------------------------------------------------------    
+        for order, i, j in vals:
+            if order.id == order_id:
+                self.reserved_orders[owner].remove((order, i, j))
+                break
+                
+    # ----------------------------------------------------------------------------------------------
     
-    def remove_orders(self, *, orders_id: list[str]) -> None:
+    def undo_reservations(self, owner : str) -> None:
         """
-        Remove orders from the matrix.
-        Only called when a Drone accepts an offer made by the warehouse.
-        Clears the previous order selection.
+        Undo the reservations of orders in the matrix.
+        Only called when a Drone refuses an offer made by the warehouse.
 
         Args:
-            orders_id (list[str]): The list of order ids to be removed.
+            owner (str): The id of the owner of the order.
         """
-        for i in range(self.divisions):
-            for j in range(self.divisions):
-                self.matrix[i, j] = [order for order in self.matrix[i, j] if order.id not in orders_id]
+        
+        for order, i, j in self.reserved_orders[owner]:
+            self.matrix[i, j].append(order)
+            
+        del self.reserved_orders[owner]
 
 # ----------------------------------------------------------------------------------------------
