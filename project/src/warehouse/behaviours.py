@@ -11,7 +11,6 @@ METADATA_NEXT_BEHAVIOUR = "next_behaviour"
 SUGGEST= "suggest"
 DECIDE = "decide"
 PICKUP = "pickup_orders"
-RECHARGE = "recharge"
 
 # ----------------------------------------------------------------------------------------------
 
@@ -109,7 +108,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 self.agent.orders_to_be_picked[self.sender].append(self.agent.inventory[order["id"]])
                 del self.agent.inventory[order["id"]]
                 
-            # Undo reservations for orders the drone refused
+            # Undo reservations for orders the drone refused, if any
             self.agent.orders_matrix.undo_reservations(self.sender)
             
             print("Inventory size After: {}".format(len(self.agent.inventory)))
