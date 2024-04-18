@@ -12,16 +12,29 @@
     <!-- END LEAFLET -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <title>ASMA Project 1</title>
+    <style>
+      .container {
+          display: flex;
+      }
+
+      p {
+          margin: 0 10px; /* Add margin between instances */
+      }
+    </style>
   </head>
   <body>
     <h1>Armazon Delivery Simulation</h1>
     <h2>Metrics</h2>
-    <p>
-      <b>Total average distance:&ensp;</b><span id="average_distance">0.0</span> km<br>
-      <b>Current average capacity:&ensp;</b><span id="average_capacity">0.0</span> %<br>
-      <b>Current average autonomy:&ensp;</b><span id="average_autonomy">0.0</span> %<br>
-      <b>Average orders delivered:&ensp;</b><span id="average_orders_delivered">0.0</span><br>
-    </p>
+    <div class="container">
+      <p class="average">
+        <b>Total</b><br>
+        <b>Distance:&ensp;</b><span id="total_distance">0.0</span> km<br>
+        <b>Capacity:&ensp;</b><span id="average_capacity">0.0</span> %<br>
+        <b>Autonomy:&ensp;</b><span id="average_autonomy">0.0</span> %<br>
+        <b>Orders Delivered:&ensp;</b><span id="total_orders_delivered">0.0</span><br>
+      </p>
+    </div>
+    
     <!-- LEAFLET -->
     <div id="mapid" style="width: 100%; height: 600px;"></div>
     <script>
@@ -92,17 +105,58 @@
           totalDrones = 1;
         }
 
-        averagedDroneMetrics['distance'] = totalDistance / totalDrones;
-        averagedDroneMetrics['capacity'] = totalCapacity / totalDrones;
-        averagedDroneMetrics['autonomy'] = totalAutonomy / totalDrones;
-        averagedDroneMetrics['orders_delivered'] = totalOrdersDelivered / totalDrones;
+        var distance = totalDistance;
+        var capacity = totalCapacity / totalDrones;
+        var autonomy = totalAutonomy / totalDrones;
+        var orders = totalOrdersDelivered;
 
         // update in the html
-        document.getElementById('average_distance').innerHTML = averagedDroneMetrics['distance'].toFixed(2);
-        document.getElementById('average_capacity').innerHTML = averagedDroneMetrics['capacity'].toFixed(2);
-        document.getElementById('average_autonomy').innerHTML = averagedDroneMetrics['autonomy'].toFixed(2);
-        document.getElementById('average_orders_delivered').innerHTML = averagedDroneMetrics['orders_delivered'].toFixed(2);
+        document.getElementById('total_distance').innerHTML = distance.toFixed(2);
+        document.getElementById('average_capacity').innerHTML =capacity.toFixed(2);
+        document.getElementById('average_autonomy').innerHTML = autonomy.toFixed(2);
+        document.getElementById('total_orders_delivered').innerHTML = orders;
+
+        var instances = document.querySelectorAll('.container p:not(.average) .distance');
+        
+        instances.forEach(function(instance) {
+          // Get name of the drone, in span before the distance
+          var name = instance.previousElementSibling.previousElementSibling.previousElementSibling.textContent;
+
+          var distance = dronesMetrics[name].distance;
+          var capacity = dronesMetrics[name].capacity;
+          var autonomy = dronesMetrics[name].autonomy;
+          var ordersDelivered = dronesMetrics[name].orders_delivered;
+
+          // Update the text content of the spans
+          document.getElementById(name + '_distance').textContent = distance.toFixed(2);
+          document.getElementById(name + '_capacity').textContent = capacity.toFixed(2) + ' %';
+          document.getElementById(name + '_autonomy').textContent = autonomy.toFixed(2) + ' %';
+          document.getElementById(name + '_orders_delivered').textContent = ordersDelivered;
+          });
+          
+
       }
+
+      function createInstance(name, distance, capacity, autonomy, orders_delivered) {
+        // Create a new paragraph element
+        var paragraph = document.createElement('p');
+
+        // Clone the template HTML code
+        var template = `
+          <b>Drone:&ensp;</b><span class="name" id="${name}">${name}</span><br>
+          <b>Distance:&ensp;</b><span class="distance" id="${name}_distance">${distance}</span> km<br>
+          <b>Capacity:&ensp;</b><span class="capacity" id="${name}_capacity">${capacity}</span> %<br>
+          <b>Autonomy:&ensp;</b><span class="autonomy" id="${name}_autonomy">${autonomy}</span> %<br>
+          <b>Orders Delivered:&ensp;</b><span class="orders_delivered" id="${name}_orders_delivered">${orders_delivered}</span><br>
+        `;
+        
+        // Set the inner HTML of the paragraph to the template
+        paragraph.innerHTML = template;
+
+        // Append the paragraph to the body
+        document.querySelector('.container').appendChild(paragraph);
+      }
+
 
       // each 3 secs, log the orders that are not delivered yet
       setInterval(function() {
@@ -156,6 +210,8 @@
               if(dronesMetrics[item.id] == undefined) {
                 dronesMetrics[item.id] = {};
               }
+
+              createInstance(item.id, item.distance, item.capacity, item.autonomy, item.orders_delivered);
             }
             else {
               console.log('Unknown type: ' + item.type);
