@@ -15,27 +15,26 @@ RECHARGE = "recharge"
 
 # ----------------------------------------------------------------------------------------------
 
-def get_next_behav(message : Message):
+def get_next_behav(message : Message) :
     if message.metadata[METADATA_NEXT_BEHAVIOUR] == SUGGEST:
         capacity = json.loads(message.body)["capacity"]
         return SuggestOrderBehaviour(sender=str(message.sender), drone_capacity=capacity)
     elif message.metadata[METADATA_NEXT_BEHAVIOUR] == DECIDE:
         return DecideOrdersBehaviour(sender=str(message.sender), message=message)
     elif message.metadata[METADATA_NEXT_BEHAVIOUR] == PICKUP:
-        ...#return PickupOrdersBehaviour()
-    elif message.metadata[METADATA_NEXT_BEHAVIOUR] == RECHARGE:
-        ...#return RechargeDroneBehaviour()
+        return PickupOrdersBehaviour(sender=str(message.sender), message=message)
     else:
         print("ERROR - Unknown next behaviour")
-        return DismissBehaviour()
+        return None
 
 # ----------------------------------------------------------------------------------------------
 
 class IdleBehaviour(CyclicBehaviour):
+    
     async def run(self):
         if len(self.agent.inventory) == 0 and self.agent.orders_to_be_picked == {}:
             self.agent.logger.log("[IDLE] - No orders to be picked")
-            self.agent.kill()
+            self.kill()
             return
         
         message = await self.receive(timeout=5)
@@ -43,7 +42,15 @@ class IdleBehaviour(CyclicBehaviour):
             self.agent.logger.log("[IDLE] Waiting for available drones...")
         else:
             self.agent.logger.log("[IDLE] - [MESSAGE] - from {} with metadata :{}".format( str(message.sender), str(message.metadata)))
-            self.agent.add_behaviour(get_next_behav(message))
+            
+            b = get_next_behav(message)
+            if b is not None:
+                self.agent.add_behaviour(b)
+            else:
+                self.agent.logger.log("[IDLE] - [ERROR] - Next behaviour is None")
+                self.kill()
+                return
+            
             
     async def on_end(self):
         self.agent.add_behaviour(DismissBehaviour()) 
@@ -101,7 +108,26 @@ class DecideOrdersBehaviour(OneShotBehaviour):
         elif self.message.metadata["performative"] == "reject-proposal":
             self.agent.logger.log(f"[DECIDING] - [REJECTED] - {self.sender}")
         
-            
+# ----------------------------------------------------------------------------------------------
+  
+class PickupOrdersBehaviour(OneShotBehaviour):
+    def __init__(self, sender : str, message : Message):
+        super().__init__()
+        self.sender = sender
+        self.message = message
+        
+    async def run(self):
+        orders = self.agent.orders_to_be_picked[self.sender]
+        for order in orders:
+            self.agent.logger.log(f"[PICKUP] - {order}")
+        
+        del self.agent.orders_to_be_picked[self.sender]
+        
+        message = Message(to=self.sender)
+        message.set_metadata("performative", "confirm")
+
+        await self.send(message)
+          
 # ----------------------------------------------------------------------------------------------
 
 class DismissBehaviour(CyclicBehaviour):    

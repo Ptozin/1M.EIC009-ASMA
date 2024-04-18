@@ -15,8 +15,10 @@ from flask_socketio import SocketIO
 STATE_AVAILABLE = "available"
 STATE_SUGGEST = "suggest"
 STATE_PICKUP = "pickup"
-STATE_RECHARGE = "recharge"
 STATE_DELIVER = "deliver"
+STATE_DEAD = "dead"
+
+TIME_MULTIPLIER = 500.0
 
 
 # ----------------------------------------------------------------------------------------------
@@ -59,8 +61,18 @@ class DroneAgent(Agent):
         fsm.add_state(name=STATE_AVAILABLE, state=AvailableBehaviour(), initial=True)
         fsm.add_state(name=STATE_SUGGEST, state=OrderSuggestionsBehaviour())
         fsm.add_state(name=STATE_PICKUP, state=PickupOrdersBehaviour())
+        fsm.add_state(name=STATE_DELIVER, state=DeliverOrdersBehaviour())
+        fsm.add_state(name=STATE_DEAD, state=DeadBehaviour())
         fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_SUGGEST)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_PICKUP)
+        fsm.add_transition(source=STATE_PICKUP, dest=STATE_DELIVER)
+        fsm.add_transition(source=STATE_DELIVER, dest=STATE_AVAILABLE)
+        
+        fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_DEAD)
+        fsm.add_transition(source=STATE_SUGGEST, dest=STATE_DEAD)
+        fsm.add_transition(source=STATE_PICKUP, dest=STATE_DEAD)
+        fsm.add_transition(source=STATE_DELIVER, dest=STATE_DEAD)
+        
         self.add_behaviour(fsm)
         
         
@@ -77,6 +89,31 @@ class DroneAgent(Agent):
         })     
         
     # ----------------------------------------------------------------------------------------------
+
+    def recharge(self) -> None:
+        """
+        Method to recharge the drone.
+        """
+        self.params.curr_autonomy = self.params.max_autonomy
+
+    def update_position(self, target_latitude : float, target_longitude : float) -> None:
+        position = next_position(
+            self.position['latitude'], self.position['longitude'],
+            target_latitude, target_longitude,
+            self.params.velocity * TIME_MULTIPLIER
+        )
+            
+        self.params.curr_autonomy -= haversine_distance(
+            self.position['latitude'], self.position['longitude'],
+            position['latitude'], position['longitude']
+        )
+        
+        self.position = position
+        
+        if self.params.curr_autonomy < 0:
+            self.logger.log(f"Drone out of battery")
+            raise Exception("Drone out of battery")
+        
 
     def arrived_at_next_order(self):
         """
@@ -97,7 +134,15 @@ class DroneAgent(Agent):
         """
         return self.position["latitude"] == self.warehouse_positions[self.next_warehouse]["latitude"] \
            and self.position["longitude"] == self.warehouse_positions[self.next_warehouse]["longitude"]
-        
+
+    def has_inventory(self) -> bool:
+        """
+        Method to check if the drone has any orders in its inventory.
+
+        Returns:
+            bool: True if the drone has orders in its inventory, False otherwise.
+        """
+        return len(self.next_orders) > 0        
 
     def any_warehouse_available(self) -> bool:
         """
@@ -126,6 +171,15 @@ class DroneAgent(Agent):
         """
         return self.warehouse_positions[self.next_warehouse]['latitude'], self.warehouse_positions[self.next_warehouse]['longitude']
         
+    def get_next_order_position(self) -> tuple:
+        """
+        Method to get the next order position.
+
+        Returns:
+            tuple: The latitude and longitude of the next order.
+        """
+        return self.next_order.destination_position['latitude'], self.next_order.destination_position['longitude']    
+    
     # ----------------------------------------------------------------------------------------------
 
     def add_order(self, order : DeliveryOrder) -> None:
@@ -136,24 +190,29 @@ class DroneAgent(Agent):
         Args:
             order (DeliveryOrder): The order to add.
         """
+        #TODO: verify if this doesn't f the frontend
+        order.mark_as_taken()
+        
         self.next_orders.append(order)
-        self.total_orders.append(order)
+        self.next_order = order
         self.params.add_order(order.weight, order.get_order_destination_position())
         
-    def drop_order(self, order : DeliveryOrder) -> None:
+    def drop_order(self) -> None:
         """
         Method to remove an order from the drone's current orders.
         Updates the current capacity and empties the current order field
 
-        Args:
-            order (DeliveryOrder): The order to add.
         """
+        
+        order = self.next_orders.pop(0) 
         self.params.drop_order(order.weight)
-        self.next_orders.remove(order)
-        self.next_order = None
-
+        # Only append the order to the total orders list if it has been delivered
+        self.total_orders.append(order)
+        
         order.mark_as_delivered()
         self.orders_to_visualize.append(order)
+        
+        self.next_order = order
 
 # ----------------------------------------------------------------------------------------------
 
@@ -175,61 +234,4 @@ class DroneAgent(Agent):
         
         return warehouse, orders
         
-        
-
-    def best_order_decision(self) -> str:
-        # if winner is None, that means that it didn't receive any orders
-        winner = None
-        drone_utility = float('-inf')
-        
-        if self.next_orders:
-            orders = self.next_orders
-            closest = closest_order(self.position["latitude"], self.position["longitude"], orders)
-            distance_closest_order = haversine_distance(
-                self.position["latitude"], 
-                self.position["longitude"], 
-                closest.destination_position['latitude'], 
-                closest.destination_position['longitude']
-            )
-            path = generate_path(orders, closest)
-            travel_distance = distance_closest_order + calculate_travel_distance(path)
-                
-            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
-            drone_utility = utility(travel_distance, self.params.velocity, capacity_level)
-            
-        print(f"{self.params.id} - [BEST ORDER DECISION] - {self.available_order_sets}")
-        
-        for warehouse, orders in self.available_order_sets.items():
-            if self.next_orders:
-                orders += self.next_orders
-            distance_warehouse = haversine_distance(
-                self.position["latitude"], 
-                self.position["longitude"], 
-                self.warehouse_positions[warehouse]['latitude'], 
-                self.warehouse_positions[warehouse]['longitude']
-            )
-            closest_to_warehouse = closest_order(
-                self.warehouse_positions[warehouse]['latitude'], 
-                self.warehouse_positions[warehouse]['longitude'], 
-                orders
-            )
-            distance_warehouse_to_closest_order = haversine_distance(
-                self.warehouse_positions[warehouse]['latitude'], 
-                self.warehouse_positions[warehouse]['longitude'], 
-                closest_to_warehouse.destination_position['latitude'], 
-                closest_to_warehouse.destination_position['longitude']
-            )
-            path = generate_path(orders, closest_to_warehouse)
-            travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
-                
-            orders += self.next_orders
-            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
-            new_utility = utility(travel_distance, self.params.velocity, capacity_level)
-                
-            if new_utility > drone_utility:
-                winner = warehouse
-                drone_utility = new_utility  
-        
-        return winner
-
 # ----------------------------------------------------------------------------------------------

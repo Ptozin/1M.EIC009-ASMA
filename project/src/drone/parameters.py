@@ -7,7 +7,7 @@ import json
 class DroneParameters:
     def __init__(self, id : str, capacity : int, autonomy : float , velocity : float) -> None:
         # ---- Metrics ----
-        self.__total_trips : int = 0
+        self.__total_trips : int = 1 # TODO: update this later, as it should be 0
         self.total_distance : float = 0.0 # Can be converted to time with velocity
         self.__min_distance_on_trip : float = float('inf') # Measured in meters
         self.__max_distance_on_trip : float = 0.0 # Measured in meters
@@ -49,6 +49,9 @@ class DroneParameters:
             distance (float): The distance of the trip.
             dest_warehouse (dict): The destination warehouse with its coordinates.
         """
+        
+        # TODO: this cannot be like this anymore, change it
+        
         self.__total_trips += 1
         self.total_distance += distance
         self.__min_distance_on_trip = min(self.__min_distance_on_trip, distance)
@@ -97,7 +100,7 @@ class DroneParameters:
         
 # ----------------------------------------------------------------------------------------------
         
-    def metrics(self) -> None:
+    def metrics(self, orders_id : list[str]) -> None:
         """
         Method to print the final metrics of the drone.
         """
@@ -112,7 +115,8 @@ class DroneParameters:
                             {"Avg Distance": round(self.__avg_distance_on_trip,2)},
                             {"Orders Delivered": self.orders_delivered},
                             {"Occupiance Rate": round(self.__occupiance_rate,2)},
-                            {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"}
+                            {"Energy Consumption": str(round(self.__energy_consumption * 100,2)) + "%"},
+                            {"Orders": orders_id}
                         ]
                     )
               

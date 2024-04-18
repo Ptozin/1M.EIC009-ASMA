@@ -34,8 +34,6 @@ class WarehouseAgent(Agent):
         
         # See if we can get rid of this
         self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
-        self.curr_drone : str | None = None
-
 
         self.logger = Logger(filename=id)
         self.socketio = socketio

@@ -56,8 +56,8 @@ class DeliveryLogic:
         for drone in self.delivery_drones:
             await drone.start()
 
-        for warehouse in self.warehouses:
-            await spade.wait_until_finished(warehouse)
+        for drone in self.delivery_drones:
+            await spade.wait_until_finished(drone)
         
     def __exit__(self, exc_type, exc_value, traceback):
         print("Exiting...")
