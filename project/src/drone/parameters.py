@@ -7,8 +7,9 @@ import json
 class DroneParameters:
     def __init__(self, id : str, capacity : int, autonomy : float , velocity : float) -> None:
         # ---- Metrics ----
-        self.__total_trips : int = 1 # TODO: update this later, as it should be 0
+        self.__total_trips : int = 0 # TODO: update this later, as it should be 0
         self.total_distance : float = 0.0 # Can be converted to time with velocity
+        self.metrics_total_distance : float = 0.0 # Same value as total_distance, but is updated to be used in visualization
         self.__min_distance_on_trip : float = float('inf') # Measured in meters
         self.__max_distance_on_trip : float = 0.0 # Measured in meters
         self.__avg_distance_on_trip : float = 0.0 # Measured in meters
@@ -16,6 +17,7 @@ class DroneParameters:
         self.__orders_to_deliver : int = 0 # Number of orders carried by the drone on the current trip
         self.__occupiance_rate : float = 0.0 # Average Occupiance Rate Per Trip, calculated with `orders_delivered / total_trips`
         self.__energy_consumption : float = 0.0 # Total Energy Consumption, calculated with `total_distance / autonomy`
+        self.__distance_on_prev_trip : float = 0.0 # Distance of the previous trip
 
         # --- Parameters ---
         self.id : str = id
@@ -32,36 +34,46 @@ class DroneParameters:
             {"center_Z": {"latitude": 37.7749, "longitude": -122.4194}},            
         ]
         
-    def refill_autonomy(self) -> None:
+    def refill_autonomy(self, warehouse : dict) -> None:
         """
         Method to refill the drone's autonomy.
+        Called when the drone returns to the warehouse.
+        Updates the previous trip distance.
         """
         self.curr_autonomy = self.max_autonomy
+        
+        
+        self.__path.append(warehouse)
+        
+        self.__total_trips += 1
+        if (self.__distance_on_prev_trip > 0):
+            self.add_trip(self.__distance_on_prev_trip)
+            
+            # reset distance covered
+            self.__distance_on_prev_trip = 0
 
 # ----------------------------------------------------------------------------------------------
     
-    def add_trip(self, distance : float, dest_warehouse : dict) -> None:
+    def add_trip(self, distance : float) -> None:
         """
         Method to add a trip to the drone's metrics.
         Also updates the path with the destination warehouse.
 
         Args:
             distance (float): The distance of the trip.
-            dest_warehouse (dict): The destination warehouse with its coordinates.
         """
         
         # TODO: this cannot be like this anymore, change it
         
-        self.__total_trips += 1
+        
         self.total_distance += distance
         self.__min_distance_on_trip = min(self.__min_distance_on_trip, distance)
         self.__max_distance_on_trip = max(self.__max_distance_on_trip, distance)
         self.__avg_distance_on_trip = self.total_distance / self.__total_trips
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
         self.__energy_consumption = self.total_distance / self.max_autonomy
-        self.__path.append(dest_warehouse)
         
-    def add_order(self, capacity : int, destination : dict) -> None:
+    def add_order(self, capacity : int) -> None:
         """
         Method to add an order to the drone's metrics.
 
@@ -71,18 +83,26 @@ class DroneParameters:
         """
         self.__orders_to_deliver += 1
         self.curr_capacity += capacity
-        self.__path.append(destination)
     
-    def drop_order(self, capacity : int) -> None:
+    def drop_order(self, capacity : int, distance_covered : int, destination : dict) -> None:
         """
         Method to drop an order from the drone's metrics.
 
         Args:
             capacity (int): The capacity of the order.
         """
+        self.__distance_on_prev_trip += distance_covered
         self.__orders_to_deliver -= 1
         self.orders_delivered += 1
         self.curr_capacity -= capacity
+        self.__path.append(destination)
+        
+    def update_distance(self, distance : float) -> None:
+        """
+        Method to update the distance covered by the drone.
+        For visualization purposes only.
+        """
+        self.metrics_total_distance += distance
         
     def __str__(self) -> str:
         return "{} - Drone with capacity ({}/{}) and autonomy ({}/{}) delivering {} orders, with {} completed orders"\
@@ -109,7 +129,7 @@ class DroneParameters:
               .format(self.id, 
                         [
                             {"Total Trips": self.__total_trips},
-                            {"Total Distance": round(self.total_distance,2)},
+                            {"Total Distance": round(self.metrics_total_distance,2)},
                             {"Min Distance": round(self.__min_distance_on_trip,2)},
                             {"Max Distance": round(self.__max_distance_on_trip,2)},
                             {"Avg Distance": round(self.__avg_distance_on_trip,2)},

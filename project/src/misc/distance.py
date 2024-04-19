@@ -32,14 +32,14 @@ def next_position(curr_lat, curr_lon, target_lat, target_lon, velocity):
         return {
             "latitude": target_lat,
             "longitude": target_lon
-        }
+        }, distance
     fraction = min(velocity / distance, 1.0)
     new_lat = curr_lat + fraction * (target_lat - curr_lat)
     new_lon = curr_lon + fraction * (target_lon - curr_lon)
     return {
         "latitude": new_lat,
         "longitude": new_lon
-    }
+    }, distance
 
 def __test():
     # Test the haversine function

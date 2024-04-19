@@ -53,6 +53,8 @@ class DroneAgent(Agent):
         
         self.warehouses_responses = []
         
+        self.__distance_since_last_drop : float = 0.0
+        
     async def setup(self) -> None:
         """
         Agent's setup method. It adds the IdleBehav behaviour.
@@ -104,11 +106,14 @@ class DroneAgent(Agent):
                         self.position['latitude'], self.position['longitude'], 
                         target_latitude, target_longitude), 2)))
         
-        position = next_position(
+        position, distance = next_position(
             self.position['latitude'], self.position['longitude'],
             target_latitude, target_longitude,
             self.params.velocity * TIME_MULTIPLIER
         )
+        
+        self.__distance_since_last_drop += distance
+        self.params.update_distance(distance)
             
         self.params.curr_autonomy -= haversine_distance(
             self.position['latitude'], self.position['longitude'],
@@ -201,7 +206,7 @@ class DroneAgent(Agent):
         
         self.next_orders.append(order)
         self.next_order = order
-        self.params.add_order(order.weight, order.get_order_destination_position())
+        self.params.add_order(order.weight)
         
     def drop_order(self) -> None:
         """
@@ -212,7 +217,7 @@ class DroneAgent(Agent):
         
         order = self.next_orders.pop(0) 
         self.logger.log("[DELIVERING] - Order {} delivered".format(order.id))
-        self.params.drop_order(order.weight)
+        self.params.drop_order(order.weight, self.__distance_since_last_drop,  order.get_order_destination_position())
         # Only append the order to the total orders list if it has been delivered
         self.total_orders.append(order)
         
