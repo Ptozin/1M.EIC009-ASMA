@@ -29,6 +29,23 @@ def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> Delivery
 
 # ---------------------------------------------------------------------------------------------
 
+def closest_warehouse(latitude, longitude, warehouse_positions : dict) -> dict:
+    min_dist = float('inf')
+    closest = None
+    for warehouse_id, position in warehouse_positions.items():
+        dist = haversine_distance(
+            latitude,
+            longitude,
+            position['latitude'],
+            position['longitude']
+        )
+        if dist < min_dist:
+            min_dist = dist
+            closest = warehouse_id
+    return closest
+
+# ---------------------------------------------------------------------------------------------
+
 def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> list[DeliveryOrder]:
     if not orders:
         return []

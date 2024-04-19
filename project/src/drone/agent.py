@@ -21,7 +21,6 @@ STATE_DEAD = "dead"
 TIME_MULTIPLIER = 500.0
 INTERVAL_BETWEEN_TICKS = 0.030
 
-
 # ----------------------------------------------------------------------------------------------
 
 class DroneAgent(Agent):
@@ -38,6 +37,7 @@ class DroneAgent(Agent):
         self.distance_to_next_warehouse = 0.0
         self.available_order_sets : dict = {}
         self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
+        self.max_deliverable_order : DeliveryOrder = None
     
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
@@ -79,8 +79,6 @@ class DroneAgent(Agent):
         fsm.add_transition(source=STATE_DELIVER, dest=STATE_DEAD)
         
         self.add_behaviour(fsm)
-        
-        
 
     def __str__(self) -> str:
         return str(self.params)
@@ -230,7 +228,36 @@ class DroneAgent(Agent):
         
         self.next_order = order
 
-# ----------------------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------------
+    
+    def tasks_in_range(self) -> None:
+        distance_max_order = 0.0
+        current_position = self.position
+        for order in self.next_orders:
+            distance_max_order += haversine_distance(
+                current_position['latitude'], 
+                current_position['longitude'],
+                order.destination_position['latitude'],
+                order.destination_position['longitude']
+            )
+            current_position = order.destination_position
+            closest_warehouse_to_order = closest_warehouse(
+                order.destination_position['latitude'],
+                order.destination_position['longitude'],
+                self.warehouse_positions
+            )
+            distance_order_to_warehouse = haversine_distance(
+                order.destination_position['latitude'],
+                order.destination_position['longitude'],
+                self.warehouse_positions[closest_warehouse_to_order]['latitude'],
+                self.warehouse_positions[closest_warehouse_to_order]['longitude']
+            )
+            total_required_distance = distance_max_order + distance_order_to_warehouse
+            if total_required_distance > self.params.curr_autonomy:
+                self.max_deliverable_order = order
+                break
+    
+    # ----------------------------------------------------------------------------------------------
 
     def best_orders(self) -> tuple[str, list[DeliveryOrder]]:
         """
