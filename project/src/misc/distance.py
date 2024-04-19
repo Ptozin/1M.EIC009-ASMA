@@ -26,30 +26,32 @@ def haversine_distance(lat1 : float , lon1 : float, lat2 : float, lon2 : float, 
     
     return R * c
 
-def next_position(curr_lat, curr_lon, target_lat, target_lon, velocity):
+def next_position(curr_lat : float, curr_lon : float, target_lat : float, target_lon : float, velocity : float) -> tuple[dict, float]:
+    """
+    Args:
+        curr_lat (float): Current latitude of the drone.
+        curr_lon (float): Current longitude of the drone.
+        target_lat (float): Latitude of the target point.
+        target_lon (float): Longitude of the target point.
+        velocity (float): Velocity of the drone.
+        
+    Returns:
+        tuple[dict, float]: The next position of the drone and the distance to the target point.
+    """
+    
     distance = haversine_distance(curr_lat, curr_lon, target_lat, target_lon)
     if distance == 0.0:
         return {
             "latitude": target_lat,
             "longitude": target_lon
         }, distance
+        
+    distance_covered = velocity if distance > velocity else distance 
+        
     fraction = min(velocity / distance, 1.0)
     new_lat = curr_lat + fraction * (target_lat - curr_lat)
     new_lon = curr_lon + fraction * (target_lon - curr_lon)
     return {
         "latitude": new_lat,
         "longitude": new_lon
-    }, distance
-
-def __test():
-    # Test the haversine function
-    lat1 = 19.017584
-    lon1 = 72.922585
-    lat2 = 18.994237
-    lon2 = 72.825553
-     
-    print(haversine_distance(lat1, lon1, lat2, lon2), "KM")
-    # Expected output: 10.526425869824223 KM
-    
-if __name__ == "__main__":
-    __test()
+    }, distance_covered

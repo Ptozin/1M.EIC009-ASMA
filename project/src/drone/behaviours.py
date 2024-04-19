@@ -14,9 +14,6 @@ DISMISSED = 20
 DELIVERING = 30
 RETURNING = 40
 RETURNED = 50
-ERROR = 60
-
-INTERVAL_BETWEEN_TICKS = 0.2
 
 # ---
 
@@ -51,7 +48,7 @@ class FSMBehaviour(FSMBehaviour):
         orders_id = [order.id for order in self.agent.total_orders]
         
         self.agent.logger.log(self.agent.params.metrics(orders_id=orders_id))
-        # self.agent.params.store_results()
+        self.agent.params.store_results()
 
 # ----------------------------------------------------------------------------------------------
 
@@ -151,7 +148,7 @@ class PickupOrdersBehaviour(State):
         while not self.agent.arrived_at_next_warehouse():
             next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
-            await asyncio.sleep(INTERVAL_BETWEEN_TICKS)
+            await asyncio.sleep(self.agent.tick_rate)
         
         # If the drone has arrived at the warehouse, then it should pick up the orders
         message = Message()
@@ -197,7 +194,7 @@ class DeliverOrdersBehaviour(State):
             while not self.agent.arrived_at_next_order():
                 next_order_lat, next_order_lon = self.agent.get_next_order_position()
                 self.agent.update_position(next_order_lat, next_order_lon)
-                await asyncio.sleep(INTERVAL_BETWEEN_TICKS)
+                await asyncio.sleep(self.agent.tick_rate)
         
             # If the drone has arrived at the order's destination, then it should deliver the order
             self.agent.drop_order()
@@ -220,7 +217,7 @@ class EmitPositionBehaviour(PeriodicBehaviour):
             'id': self.agent.params.id,
             'latitude': self.agent.position['latitude'],
             'longitude': self.agent.position['longitude'],
-            'distance': self.agent.params.total_distance,
+            'distance': self.agent.params.metrics_total_distance,
             'capacity': round(self.agent.params.curr_capacity * 100.0/self.agent.params.max_capacity,2),
             'autonomy': round(self.agent.params.curr_autonomy * 100.0/self.agent.params.max_autonomy,2),
             'orders_delivered': self.agent.params.orders_delivered,

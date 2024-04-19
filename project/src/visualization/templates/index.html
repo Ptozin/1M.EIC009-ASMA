@@ -188,6 +188,7 @@
             
             if(item.type == 'drone') {
               dronesMetrics[item.id] = item;
+              dronesMetrics[item.id].distance = item.distance / 1000.0;
             }
           }
           // otherwise, create a new marker, according if it is a warehouse, a order or a drone

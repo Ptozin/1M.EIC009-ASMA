@@ -48,16 +48,13 @@ class DroneParameters:
         self.__total_trips += 1
         if (self.__distance_on_prev_trip > 0):
             self.add_trip(self.__distance_on_prev_trip)
-            
-            # reset distance covered
-            self.__distance_on_prev_trip = 0
 
 # ----------------------------------------------------------------------------------------------
     
     def add_trip(self, distance : float) -> None:
         """
         Method to add a trip to the drone's metrics.
-        Also updates the path with the destination warehouse.
+        Only called when the drone returns to the warehouse.
 
         Args:
             distance (float): The distance of the trip.
@@ -72,6 +69,8 @@ class DroneParameters:
         self.__avg_distance_on_trip = self.total_distance / self.__total_trips
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
         self.__energy_consumption = self.total_distance / self.max_autonomy
+        
+        self.__distance_on_prev_trip = 0
         
     def add_order(self, capacity : int) -> None:
         """
@@ -129,7 +128,7 @@ class DroneParameters:
               .format(self.id, 
                         [
                             {"Total Trips": self.__total_trips},
-                            {"Total Distance": round(self.metrics_total_distance,2)},
+                            {"Total Distance": round(self.total_distance,2)},
                             {"Min Distance": round(self.__min_distance_on_trip,2)},
                             {"Max Distance": round(self.__max_distance_on_trip,2)},
                             {"Avg Distance": round(self.__avg_distance_on_trip,2)},

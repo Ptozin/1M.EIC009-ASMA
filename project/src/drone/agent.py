@@ -18,8 +18,8 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 50.0
-INTERVAL_BETWEEN_TICKS = 0.2
+TIME_MULTIPLIER = 500.0
+INTERVAL_BETWEEN_TICKS = 0.030
 
 
 # ----------------------------------------------------------------------------------------------
@@ -54,6 +54,7 @@ class DroneAgent(Agent):
         self.warehouses_responses = []
         
         self.__distance_since_last_drop : float = 0.0
+        self.tick_rate = INTERVAL_BETWEEN_TICKS
         
     async def setup(self) -> None:
         """
@@ -98,23 +99,26 @@ class DroneAgent(Agent):
         """
         Method to recharge the drone.
         """
-        self.params.curr_autonomy = self.params.max_autonomy
+        
+        warehouse = self.warehouse_positions[self.next_warehouse]
+        
+        self.params.refill_autonomy(warehouse)
 
     def update_position(self, target_latitude : float, target_longitude : float) -> None:
         self.logger.log("[DELIVERING] - Distance to target: {} meters"\
             .format(round(haversine_distance(
                         self.position['latitude'], self.position['longitude'], 
                         target_latitude, target_longitude), 2)))
-        
+                
         position, distance = next_position(
             self.position['latitude'], self.position['longitude'],
             target_latitude, target_longitude,
-            self.params.velocity * TIME_MULTIPLIER
+            self.params.velocity * TIME_MULTIPLIER * self.tick_rate
         )
         
         self.__distance_since_last_drop += distance
         self.params.update_distance(distance)
-            
+                    
         self.params.curr_autonomy -= haversine_distance(
             self.position['latitude'], self.position['longitude'],
             position['latitude'], position['longitude']
