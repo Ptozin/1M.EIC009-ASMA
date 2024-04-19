@@ -18,7 +18,7 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 500.0
+TIME_MULTIPLIER = 5000.0
 INTERVAL_BETWEEN_TICKS = 0.030
 
 # ----------------------------------------------------------------------------------------------
@@ -92,6 +92,18 @@ class DroneAgent(Agent):
         })     
         
     # ----------------------------------------------------------------------------------------------
+
+    def get_current_metrics(self):
+        return {
+            'id': self.params.id,
+            'latitude': self.position['latitude'],
+            'longitude': self.position['longitude'],
+            'distance': self.params.metrics_total_distance,
+            'capacity': round(self.params.curr_capacity * 100.0/self.params.max_capacity,2),
+            'autonomy': round(self.params.curr_autonomy * 100.0/self.params.max_autonomy,2),
+            'orders_delivered': self.params.orders_delivered,
+            'type': 'drone'
+        }
 
     def recharge(self) -> None:
         """
@@ -227,6 +239,8 @@ class DroneAgent(Agent):
         self.orders_to_visualize.append(order)
         
         self.next_order = order
+        
+        self.__distance_since_last_drop = 0.0
 
     # ----------------------------------------------------------------------------------------------
     

@@ -123,6 +123,8 @@ class DroneParameters:
         """
         Method to print the final metrics of the drone.
         """
+        self.add_trip(self.__distance_on_prev_trip)
+        self.__distance_on_prev_trip = 0.0
         self.__occupiance_rate = self.orders_delivered / self.__total_trips
         return "{} Metrics - {}"\
               .format(self.id, 
@@ -143,6 +145,7 @@ class DroneParameters:
         """
         Method to store the final metrics of the drone and of its trips
         """
+        self.__occupiance_rate = self.orders_delivered / self.__total_trips
         with open(f"logs/{self.id}.json", "w") as f:
             json.dump(
                 { 

@@ -213,16 +213,7 @@ class EmitPositionBehaviour(PeriodicBehaviour):
     async def run(self):
         data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
         self.agent.orders_to_visualize = []
-        data.append({
-            'id': self.agent.params.id,
-            'latitude': self.agent.position['latitude'],
-            'longitude': self.agent.position['longitude'],
-            'distance': self.agent.params.metrics_total_distance,
-            'capacity': round(self.agent.params.curr_capacity * 100.0/self.agent.params.max_capacity,2),
-            'autonomy': round(self.agent.params.curr_autonomy * 100.0/self.agent.params.max_autonomy,2),
-            'orders_delivered': self.agent.params.orders_delivered,
-            'type': 'drone'
-        })        
+        data.append(self.agent.get_current_metrics())        
         self.agent.socketio.emit('update_data', data)
         
         if self.agent.need_to_stop:
