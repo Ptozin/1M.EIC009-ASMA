@@ -59,7 +59,7 @@ class IdleBehaviour(CyclicBehaviour):
 class SuggestOrderBehaviour(OneShotBehaviour):
     def __init__(self, sender : str, drone_capacity : int):
         super().__init__()
-        self.sender = sender
+        self.sender : str = sender
         self.drone_capacity = drone_capacity
         
     async def run(self):
@@ -81,8 +81,8 @@ class SuggestOrderBehaviour(OneShotBehaviour):
 class DecideOrdersBehaviour(OneShotBehaviour):
     def __init__(self, sender : str, message : Message):
         super().__init__()
-        self.sender = sender
-        self.message = message
+        self.sender : str = sender
+        self.message : Message = message
     
     async def run(self):
         if self.message.metadata["performative"] == "accept-proposal":
@@ -118,8 +118,8 @@ class DecideOrdersBehaviour(OneShotBehaviour):
 class PickupOrdersBehaviour(OneShotBehaviour):
     def __init__(self, sender : str, message : Message):
         super().__init__()
-        self.sender = sender
-        self.message = message
+        self.sender : str = sender
+        self.message : Message = message
         
     async def run(self):
         orders = self.agent.orders_to_be_picked[self.sender]
@@ -147,15 +147,6 @@ class DismissBehaviour(CyclicBehaviour):
             await self.send(message)
         
 # ----------------------------------------------------------------------------------------------
-
-class SetupOrdersMatrixBehaviour(OneShotBehaviour):
-    async def run(self):
-        self.agent.orders_matrix = OrdersMatrix(
-                self.agent.inventory, 
-                divisions=5, 
-                capacity_multiplier=3,
-                warehouse_position=self.agent.position
-            )
 
 class EmitSetupBehaviour(OneShotBehaviour):
     async def run(self):
