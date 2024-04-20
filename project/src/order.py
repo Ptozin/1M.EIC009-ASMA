@@ -114,8 +114,8 @@ class DeliveryOrder:
     def __lt__(self, weight : float) -> bool:
         return self.weight < weight
     
-    def __eq__(self, weight : float) -> bool:
-        return self.weight == weight
+    def __eq__(self, id : str) -> bool:
+        return self.id == id
     
     def __le__(self, weight : float) -> bool:
         return self.weight <= weight

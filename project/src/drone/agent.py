@@ -140,7 +140,6 @@ class DroneAgent(Agent):
         
         if self.params.curr_autonomy < 0:
             self.logger.log(f"Drone out of battery")
-        
 
     def arrived_at_next_order(self):
         """

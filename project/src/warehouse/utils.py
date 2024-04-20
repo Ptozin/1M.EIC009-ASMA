@@ -5,6 +5,8 @@ from collections import deque
 
 from order import DeliveryOrder
 
+from time import time
+
 # ----------------------------------------------------------------------------------------------
 
 class OrdersMatrix:
@@ -30,15 +32,9 @@ class OrdersMatrix:
         
         self.matrix : np.array = np.empty((self.divisions, self.divisions), dtype=object)
         
-        """
-        The dictionary of reserved orders.
-        
-        {
-            "drone_X" : [order_1, order_2, ...],
-            ...
-        }
-        """
         self.reserved_orders : dict[str, tuple] = {}
+        self.reserved_orders_timer : dict[str, float] = {}
+        self.__timeout : float = 5.0 # seconds
         
         for i in range(self.divisions):
             for j in range(self.divisions):
@@ -48,30 +44,40 @@ class OrdersMatrix:
                 
     # ----------------------------------------------------------------------------------------------            
                 
-    def __setup(self, inventory, warehouse_position) -> list:
+    def __setup(self, inventory : dict[str, DeliveryOrder], warehouse_position : dict ) -> list:
+        """
+        Setup the corners of the matrix.
+
+        Args:
+            inventory (dict[str, DeliveryOrder]): The inventory of orders.
+            warehouse_position (dict): The position of the warehouse.
+
+        Returns:
+            list: The corners of the matrix.
+        """
         # Extract the minimum and maximum coordinates for the destination positions, and add a small buffer
         buffer = 0.01
         
-        min_dest_lat = min(order.destination_position["latitude"] for order in inventory.values()) - buffer
-        max_dest_lat = max(order.destination_position["latitude"] for order in inventory.values()) + buffer
-        min_dest_long = min(order.destination_position["longitude"] for order in inventory.values()) - buffer
-        max_dest_long = max(order.destination_position["longitude"] for order in inventory.values()) + buffer
+        min_dest_lat : float = min(order.destination_position["latitude"] for order in inventory.values()) - buffer
+        max_dest_lat : float = max(order.destination_position["latitude"] for order in inventory.values()) + buffer
+        min_dest_long : float = min(order.destination_position["longitude"] for order in inventory.values()) - buffer
+        max_dest_long : float = max(order.destination_position["longitude"] for order in inventory.values()) + buffer
 
-        min_dest_lat = min(min_dest_lat, warehouse_position["latitude"]) - buffer
-        max_dest_lat = max(max_dest_lat, warehouse_position["latitude"]) + buffer
-        min_dest_long = min(min_dest_long, warehouse_position["longitude"]) - buffer
-        max_dest_long = max(max_dest_long, warehouse_position["longitude"]) + buffer
+        min_dest_lat : float = min(min_dest_lat, warehouse_position["latitude"]) - buffer
+        max_dest_lat : float = max(max_dest_lat, warehouse_position["latitude"]) + buffer
+        min_dest_long : float = min(min_dest_long, warehouse_position["longitude"]) - buffer
+        max_dest_long : float = max(max_dest_long, warehouse_position["longitude"]) + buffer
 
-        bottom_left = (min_dest_lat, min_dest_long)
-        bottom_right = (min_dest_lat, max_dest_long)
-        top_left = (max_dest_lat, min_dest_long)
-        top_right = (max_dest_lat, max_dest_long)
+        bottom_left : tuple[float, float] = (min_dest_lat, min_dest_long)
+        bottom_right : tuple[float, float] = (min_dest_lat, max_dest_long)
+        top_left : tuple[float, float] = (max_dest_lat, min_dest_long)
+        top_right : tuple[float, float] = (max_dest_lat, max_dest_long)
         
         return [bottom_left, bottom_right, top_left, top_right]
     
     # ----------------------------------------------------------------------------------------------
     
-    def calculate_cell_index(self, latitude : float, longitude : float) -> tuple:        
+    def calculate_cell_index(self, latitude : float, longitude : float) -> tuple[int, int]:        
         # Extract the coordinates of the top left corner
         top_left = self.corners[2]
         
@@ -103,7 +109,35 @@ class OrdersMatrix:
     
     # ----------------------------------------------------------------------------------------------
     
-    def select_orders(self, latitude: float, longitude: float, capacity: int) -> list[DeliveryOrder]:
+    def check_timeout(self) -> None:
+        """
+        Check if the timeout for a reservation has expired.
+        If so, undo the reservations of the orders.
+        """
+        current_time : float = time()
+        
+        expired_owners = [owner for owner, timer in self.reserved_orders_timer.items() if current_time - timer > self.__timeout]
+        for owner in expired_owners:
+            self.undo_reservations(owner)
+    
+    # ----------------------------------------------------------------------------------------------
+    
+    def select_orders(self, latitude: float, longitude: float, capacity: int, owner : str) -> list[DeliveryOrder]:
+        """
+        Select orders for a drone based on its capacity and location.
+
+        Args:
+            latitude (float): latitude of the drone
+            longitude (float): longitude of the drone
+            capacity (int): free capacity of the drone
+
+        Returns:
+            list[DeliveryOrder]: list of orders selected for the drone. Can be empty.
+        """
+        
+        # Check timeouts before reserving the order
+        self.check_timeout()
+        
         # Calculate the cell index for the order
         i, j = self.calculate_cell_index(latitude, longitude)
         
@@ -159,6 +193,15 @@ class OrdersMatrix:
                     queue.append((nx, ny))
                     visited.add((nx, ny))
         
+        # Now, reserve the orders for the drone
+        for order in orders:
+            self.reserve_order(
+                order.destination_position["latitude"], 
+                order.destination_position["longitude"], 
+                order.id, 
+                owner
+            )
+        
         return orders
     
     # ----------------------------------------------------------------------------------------------
@@ -184,6 +227,9 @@ class OrdersMatrix:
                     self.reserved_orders[owner] = []
                 self.reserved_orders[owner].append((order, i, j))
                 break
+            
+        # Set the timer for the owner
+        self.reserved_orders_timer[owner] = time()
 
     # ----------------------------------------------------------------------------------------------
     
@@ -196,20 +242,20 @@ class OrdersMatrix:
             order_id (str): The id of the order to be removed.
             owner (str): The id of the owner of the order.
         """
-        
-        vals = self.reserved_orders[owner]
-        
-        for order, i, j in vals:
+                
+        for order, i, j in self.reserved_orders[owner]:
             if order.id == order_id:
                 self.reserved_orders[owner].remove((order, i, j))
                 break
-                
+                            
     # ----------------------------------------------------------------------------------------------
     
     def undo_reservations(self, owner : str) -> None:
         """
         Undo the reservations of orders in the matrix.
-        Only called when a Drone refuses an offer made by the warehouse.
+        Called when a Drone refuses an offer made by the warehouse.
+        Called when the timeout for a reservation expires.
+        Called after removing all the orders for the owner, to undo the reservations of unaccepted orders.
 
         Args:
             owner (str): The id of the owner of the order.
@@ -219,5 +265,6 @@ class OrdersMatrix:
             self.matrix[i, j].append(order)
             
         del self.reserved_orders[owner]
+        del self.reserved_orders_timer[owner]
 
 # ----------------------------------------------------------------------------------------------

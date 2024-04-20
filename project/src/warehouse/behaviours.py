@@ -65,19 +65,15 @@ class SuggestOrderBehaviour(OneShotBehaviour):
     async def run(self):
         orders : list[DeliveryOrder] = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
                                                               self.agent.position['longitude'], 
-                                                              self.drone_capacity)
-        
-        # Reserve orders to drone
-        for order in orders:
-            self.agent.orders_matrix.reserve_order(order.destination_position["latitude"],
-                                                   order.destination_position["longitude"],
-                                                   order.id,
-                                                   self.sender)
-        
-        message = Message()
+                                                              self.drone_capacity,
+                                                              self.sender)
+        message : Message = Message()
         message.to = self.sender
         message.set_metadata("performative", "propose")
         message.body = json.dumps([order.__repr__() for order in orders])
+        
+        # print(f"Sending orders to {self.sender} - {message.body}")
+        
         await self.send(message)
 
 # ----------------------------------------------------------------------------------------------
@@ -103,8 +99,6 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 # Remove order from matrix
                 self.agent.orders_matrix.remove_order(order["id"], self.sender)
                                 
-                # TODO: This cant stay in the next line if there is in fact concurrency  
-                # ANSWER: Yup, there is   
                 self.agent.orders_to_be_picked[self.sender].append(self.agent.inventory[order["id"]])
                 del self.agent.inventory[order["id"]]
                 
