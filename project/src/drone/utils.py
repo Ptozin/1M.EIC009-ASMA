@@ -53,7 +53,7 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
     if start_order not in orders:
         return []
     path = [start_order]
-    visited = {start_order.id}  # Initialize visited with the order ID of the start order
+    visited = {start_order.id}
     current_order = start_order
     while len(path) < len(orders):
         next_order = None
@@ -103,59 +103,46 @@ def calculate_capacity_level(orders: list[DeliveryOrder], max_capacity: int) -> 
 
 # ---------------------------------------------------------------------------------------------
 
-def utility(travel_distance : float, velocity : float, capacity_level : float) -> float:
-    travel_time = travel_distance / velocity
-    time_k = 0.1
-    capacity_k = 2.0
-    if travel_time <= 0:
+def utility(num_orders: int, travel_distance: float, autonomy: float, capacity_level: float) -> float:
+    if num_orders == 0:
         return float('-inf')
-    # decreases with increasing travel time, sharply penalizes near-zero travel time
-    travel_utility = - time_k * (1 / travel_time + travel_time)
-    # maximize at capacity_level == 1, penalize deviation from 1
-    capacity_utility = - capacity_k * (1 - capacity_level)**2
-    # TODO: penalizes solutions that do not have enough autonomy to recharge in X warehouses
-    autonomy_utility = 0.0
-    return travel_utility + capacity_utility + autonomy_utility
+    capacity_utility = capacity_level
+    if travel_distance > autonomy:
+        travel_utility = float('-inf')
+    else:
+        travel_utility = 1 - (travel_distance / autonomy)
+    final_utility = capacity_utility + travel_utility
+    return final_utility
 
 # ---------------------------------------------------------------------------------------------
 
-def combine_orders(orders : list[DeliveryOrder], capacity : int) -> list[list[DeliveryOrder]]:
-    all_combinations = []
-    for r in range(1, len(orders) + 1):
-        all_combinations.extend(combinations(orders, r))
+def combine_orders(orders: list[DeliveryOrder], capacity: int) -> list[list[DeliveryOrder]]:
     valid_combinations = []
-    for combo in all_combinations:
-        if sum(order.weight for order in combo) <= capacity:
-            valid_combinations.append(list(combo))
+    for r in range(1, len(orders) + 1):
+        valid_combinations.extend(
+            list(combo) for combo in combinations(orders, r) if sum(order.weight for order in combo) <= capacity
+        )
     return valid_combinations
 
 # ---------------------------------------------------------------------------------------------
 
-def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, velocity: float) -> list[DeliveryOrder]:
-    
-    ret_orders = []
-    total_capacity = capacity
-    
-    for order in orders:
-        if order.weight <= total_capacity:
-            ret_orders.append(order)
-            total_capacity -= order.weight
-        if total_capacity == 0:
-            break
-    return ret_orders
-    
-    # TODO: FOR TESTING PURPOSES
-    
+def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, autonomy: float) -> list[DeliveryOrder]:
     order_sets = combine_orders(orders, capacity)
     best_set = None
     best_utility = float('-inf')
     for order_set in order_sets:
-        first_order = closest_order(latitude, longitude, order_set)
-        path = generate_path(order_set, first_order)
-        travel_distance = calculate_travel_distance(path)
+        closest = closest_order(latitude, longitude, order_set)
+        distance_closest_order = haversine_distance(
+            latitude, 
+            longitude, 
+            closest.destination_position['latitude'], 
+            closest.destination_position['longitude']
+        )
+        path = generate_path(order_set, closest)
+        travel_distance = distance_closest_order + calculate_travel_distance(path)
         capacity_level = calculate_capacity_level(order_set, capacity)
-        set_utility = utility(travel_distance, velocity, capacity_level)
-        if set_utility > best_utility:
+        set_utility = utility(len(order_set), travel_distance, autonomy, capacity_level)
+        if set_utility >= best_utility:
             best_set = order_set
             best_utility = set_utility
     return best_set

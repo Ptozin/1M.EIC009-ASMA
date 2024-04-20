@@ -4,7 +4,7 @@ from spade.message import Message
 import json
 
 from order import DeliveryOrder
-from drone.utils import best_available_orders
+from drone.utils import *
 from misc.distance import haversine_distance, next_position
 
 # ----------------------------------------------------------------------------------------------
@@ -118,7 +118,9 @@ class OrderSuggestionsBehaviour(State):
             winner, orders = self.agent.best_orders()
             print(f"[SUGGEST] - {winner} - {orders}")
             self.agent.orders_to_be_picked[winner] = self.agent.available_order_sets[winner]
-            # For now, ignore the case where there is no winner
+            
+            # TODO: add case where winner is None and drone should simply proceed with current orders
+            
             if winner is not None:
                 for warehouse in self.agent.available_order_sets.keys():
                     message = Message()
@@ -173,6 +175,15 @@ class PickupOrdersBehaviour(State):
                 
                 del self.agent.orders_to_be_picked[self.agent.next_warehouse]
                 
+                closest_order_next_warehouse = closest_order(
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
+                    self.agent.next_orders
+                )
+                self.agent.next_order = closest_order_next_warehouse
+                self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
+                
+                # TODO: use tasks in range to determine max deliverable order
                 self.set_next_state(STATE_DELIVER)
             else:
                 self.agent.logger.log("[ERROR] - Orders not picked up")
@@ -189,6 +200,9 @@ class DeliverOrdersBehaviour(State):
         #     self.agent.logger.log("[DELIVERING] - No orders to deliver")
         #     self.set_next_state(STATE_AVAILABLE)
         #     return
+        
+        # TODO: check if it is max deliverable order:
+        #       - if so can only show availability to closest warehouse which must win (vs other warehouse and vs continue with current tasks)
         
         while self.agent.has_inventory():
             while not self.agent.arrived_at_next_order():

@@ -267,7 +267,7 @@ class DroneAgent(Agent):
                 self.warehouse_positions[closest_warehouse_to_order]['longitude']
             )
             total_required_distance = distance_max_order + distance_order_to_warehouse
-            if total_required_distance > self.params.curr_autonomy:
+            if total_required_distance <= self.params.curr_autonomy:
                 self.max_deliverable_order = order
                 break
     
@@ -280,15 +280,55 @@ class DroneAgent(Agent):
         Returns:
             tuple[str, list[DeliveryOrder]]: The warehouse id and the list of orders to pick up.
         """
-        # For now, choose a random warehouse and the first N orders to fill the drone's capacity
-        warehouse : str = list(self.available_order_sets.keys())[0]
-        orders : list[DeliveryOrder] = []
-        curr_capacity = 0
-        for order in self.available_order_sets[warehouse]:
-            if curr_capacity + order.weight <= self.params.max_capacity:
-                orders.append(order)
-                curr_capacity += order.weight
+        winner = None
+        drone_utility = float('-inf')
         
-        return warehouse, orders
+        if self.next_orders:
+            orders = self.next_orders
+            closest = closest_order(self.position["latitude"], self.position["longitude"], orders)
+            distance_closest_order = haversine_distance(
+                self.position["latitude"], 
+                self.position["longitude"], 
+                closest.destination_position['latitude'], 
+                closest.destination_position['longitude']
+            )
+            path = generate_path(orders, closest)
+            travel_distance = distance_closest_order + calculate_travel_distance(path)
+                
+            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
+            drone_utility = utility(len(orders), travel_distance, self.params.curr_autonomy, capacity_level)
+        
+        for warehouse, orders in self.available_order_sets.items():
+            if self.next_orders:
+                orders += self.next_orders
+            distance_warehouse = haversine_distance(
+                self.position["latitude"], 
+                self.position["longitude"], 
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude']
+            )
+            closest_to_warehouse = closest_order(
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude'], 
+                orders
+            )
+            distance_warehouse_to_closest_order = haversine_distance(
+                self.warehouse_positions[warehouse]['latitude'], 
+                self.warehouse_positions[warehouse]['longitude'], 
+                closest_to_warehouse.destination_position['latitude'], 
+                closest_to_warehouse.destination_position['longitude']
+            )
+            path = generate_path(orders, closest_to_warehouse)
+            travel_distance = distance_warehouse + distance_warehouse_to_closest_order + calculate_travel_distance(path)
+                
+            orders += self.next_orders
+            capacity_level = calculate_capacity_level(orders, self.params.max_capacity)
+            new_utility = utility(len(orders), travel_distance, self.params.curr_autonomy, capacity_level)
+                
+            if new_utility >= drone_utility:
+                winner = warehouse
+                drone_utility = new_utility  
+        
+        return (winner, self.available_order_sets[winner] if winner else [])
         
 # ----------------------------------------------------------------------------------------------
