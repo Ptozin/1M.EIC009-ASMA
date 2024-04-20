@@ -33,13 +33,13 @@ class DroneAgent(Agent):
         self.next_warehouse : str = None
         
         self.required_autonomy : float = 0.0
-        self.required_warehouse : str = None
+        self.required_warehouse : str = None # warehouse drone needs to go when autonomy runs out
+        self.max_deliverable_order : DeliveryOrder = None # furthest order drone can deliver with autonomy leaving a warehouse
         
         self.warehouse_positions : dict = warehouse_positions    
         self.distance_to_next_warehouse = 0.0
         self.available_order_sets : dict = {}
         self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
-        self.max_deliverable_order : DeliveryOrder = None
     
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],

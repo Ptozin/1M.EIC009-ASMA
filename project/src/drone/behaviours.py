@@ -89,6 +89,7 @@ class OrderSuggestionsBehaviour(State):
         for response in responses:
             if response.metadata["performative"] == "propose":
                 self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
+                warehouse = str(response.sender).split("@")[0]
                 
                 #TODO: check, this can come in empty!!! Why though??
                 # ANSWER: all orders are reserved, but doesn't mean we can remove them
@@ -100,8 +101,8 @@ class OrderSuggestionsBehaviour(State):
                     orders.append(DeliveryOrder(**order))
                     order_choices = best_available_orders(
                         orders, 
-                        self.agent.position["latitude"], 
-                        self.agent.position["longitude"], 
+                        self.agent.warehouse_positions[warehouse]["latitude"],
+                        self.agent.warehouse_positions[warehouse]["longitude"],
                         self.agent.params.max_capacity, 
                         self.agent.params.velocity
                     )
