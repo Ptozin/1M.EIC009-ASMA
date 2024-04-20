@@ -1,11 +1,10 @@
 import asyncio
-from spade.behaviour import OneShotBehaviour, PeriodicBehaviour, CyclicBehaviour, FSMBehaviour, State
+from spade.behaviour import PeriodicBehaviour, FSMBehaviour, State
 from spade.message import Message
 import json
 
 from order import DeliveryOrder
 from drone.utils import *
-from misc.distance import haversine_distance, next_position
 
 # ----------------------------------------------------------------------------------------------
 
@@ -55,8 +54,12 @@ class FSMBehaviour(FSMBehaviour):
 class AvailableBehaviour(State):
     async def run(self):
         self.agent.warehouses_responses = []
-        
-        for warehouse in self.agent.warehouse_positions.keys():
+        warehouses = []
+        if self.agent.required_warehouse is None:
+            warehouses = self.agent.warehouse_positions.keys()
+        else:
+            warehouses = [self.agent.required_warehouse]
+        for warehouse in warehouses:
             message = Message()
             message.to = warehouse + "@localhost"
             message.body = self.agent.__repr__()
@@ -70,8 +73,6 @@ class AvailableBehaviour(State):
                 self.agent.logger.log("[ERROR] - No response from warehouse")
                 self.set_next_state(STATE_DEAD)
                 return
-        
-        # print(f"[AVAILABLE] - {len(self.agent.warehouses_responses)}")
         self.set_next_state(STATE_SUGGEST)
 
 # ----------------------------------------------------------------------------------------------
@@ -90,7 +91,7 @@ class OrderSuggestionsBehaviour(State):
                 self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
                 
                 #TODO: check, this can come in empty!!! Why though??
-                # ANSWER: all orders are reserved, but dosn't mean we can remove them
+                # ANSWER: all orders are reserved, but doesn't mean we can remove them
                 # thats what we are doing, so we good
                 proposed_orders = json.loads(response.body)
                 orders = []
@@ -107,26 +108,40 @@ class OrderSuggestionsBehaviour(State):
                 if proposed_orders != []:
                     self.agent.available_order_sets[str(response.sender).split("@")[0]] = order_choices
             elif response.metadata["performative"] == "refuse":
-                # This means that the warehouse has no orders to suggest
+                # this means that the warehouse has no orders to suggest
                 self.agent.logger.log(f"[REFUSED] - {str(response.sender)}")
                 self.agent.remove_warehouse(str(response.sender).split("@")[0])
-                
-        # ----
         
-        # If there are none, then there aren't available warehouses, so the drone should kiss the ground
+        # if there are none, then there aren't available warehouses, so the drone should kiss the ground
         if len(self.agent.available_order_sets) > 0:
+            winner, orders = None, []
+            
+            if self.agent.required_warehouse is not None:
+                winner = self.agent.required_warehouse
+                orders = self.agent.available_order_sets[winner]
+                self.agent.max_deliverable_order = None
+                self.agent.required_warehouse = None
+                print(f"[SUGGEST] - {winner} - {orders}")
+                self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+                self.set_next_state(STATE_PICKUP)
+                return
+            
             winner, orders = self.agent.best_orders()
             print(f"[SUGGEST] - {winner} - {orders}")
             self.agent.orders_to_be_picked[winner] = self.agent.available_order_sets[winner]
             
-            # TODO: add case where winner is None and drone should simply proceed with current orders
-            
-            if winner is not None:
+            if winner is None:
                 for warehouse in self.agent.available_order_sets.keys():
                     message = Message()
                     message.to = warehouse + "@localhost"
                     message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
-                    
+                    message.set_metadata("performative", "reject-proposal")                        
+                    await self.send(message)
+            else:
+                for warehouse in self.agent.available_order_sets.keys():
+                    message = Message()
+                    message.to = warehouse + "@localhost"
+                    message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
                     if warehouse == winner:
                         message.set_metadata("performative", "accept-proposal")
                         message.body = json.dumps([order.__repr__() for order in orders])
@@ -135,10 +150,9 @@ class OrderSuggestionsBehaviour(State):
                     else:
                         message.set_metadata("performative", "reject-proposal")                        
                         await self.send(message)
-                
-                # TODO: This may not be the case, but for now we will assume that it is the best choice
-                self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
-                self.set_next_state(STATE_PICKUP)
+
+            self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+            self.set_next_state(STATE_PICKUP)
         else:
             self.agent.logger.log("[FINISH] - No available orders")
             self.set_next_state(STATE_DEAD)
@@ -152,7 +166,7 @@ class PickupOrdersBehaviour(State):
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
             await asyncio.sleep(self.agent.tick_rate)
         
-        # If the drone has arrived at the warehouse, then it should pick up the orders
+        # if the drone has arrived at the warehouse, then it should pick up the orders
         message = Message()
         message.to = self.agent.next_warehouse + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
@@ -183,7 +197,7 @@ class PickupOrdersBehaviour(State):
                 self.agent.next_order = closest_order_next_warehouse
                 self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
                 
-                # TODO: use tasks in range to determine max deliverable order
+                self.agent.tasks_in_range()
                 self.set_next_state(STATE_DELIVER)
             else:
                 self.agent.logger.log("[ERROR] - Orders not picked up")
@@ -196,23 +210,26 @@ class PickupOrdersBehaviour(State):
 
 class DeliverOrdersBehaviour(State):
     async def run(self):  
-        # if not self.agent.has_inventory():
-        #     self.agent.logger.log("[DELIVERING] - No orders to deliver")
-        #     self.set_next_state(STATE_AVAILABLE)
-        #     return
+        if not self.agent.has_inventory():
+            self.agent.logger.log("[DELIVERING] - No orders to deliver")
+            self.set_next_state(STATE_AVAILABLE)
+            return
         
-        # TODO: check if it is max deliverable order:
-        #       - if so can only show availability to closest warehouse which must win (vs other warehouse and vs continue with current tasks)
-        
-        while self.agent.has_inventory():
-            while not self.agent.arrived_at_next_order():
-                next_order_lat, next_order_lon = self.agent.get_next_order_position()
-                self.agent.update_position(next_order_lat, next_order_lon)
-                await asyncio.sleep(self.agent.tick_rate)
-        
-            # If the drone has arrived at the order's destination, then it should deliver the order
-            self.agent.drop_order()
-        
+        while not self.agent.arrived_at_next_order():
+            next_order_lat, next_order_lon = self.agent.get_next_order_position()
+            self.agent.update_position(next_order_lat, next_order_lon)
+            await asyncio.sleep(self.agent.tick_rate)
+            
+        max_order = self.agent.next_order.id == self.agent.max_deliverable_order.id
+        self.agent.drop_order()    
+            
+        if max_order:
+            self.agent.required_warehouse = closest_warehouse(
+                self.agent.position["latitude"],
+                self.agent.position["longitude"],
+                self.agent.warehouse_positions
+            )
+            
         self.set_next_state(STATE_AVAILABLE)
 
 # ----------------------------------------------------------------------------------------------

@@ -29,7 +29,7 @@ def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> Delivery
 
 # ---------------------------------------------------------------------------------------------
 
-def closest_warehouse(latitude, longitude, warehouse_positions : dict) -> dict:
+def closest_warehouse(latitude, longitude, warehouse_positions : dict) -> str:
     min_dist = float('inf')
     closest = None
     for warehouse_id, position in warehouse_positions.items():

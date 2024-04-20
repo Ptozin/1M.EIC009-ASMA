@@ -9,6 +9,7 @@ from misc.log import Logger
 from drone.behaviours import *
 from drone.utils import *
 from flask_socketio import SocketIO
+from misc.distance import haversine_distance, next_position
 
 # ----------------------------------------------------------------------------------------------
 
@@ -32,6 +33,7 @@ class DroneAgent(Agent):
         self.next_warehouse : str = None
         
         self.required_autonomy : float = 0.0
+        self.required_warehouse : str = None
         
         self.warehouse_positions : dict = warehouse_positions    
         self.distance_to_next_warehouse = 0.0
