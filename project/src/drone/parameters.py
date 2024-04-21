@@ -28,12 +28,6 @@ class DroneParameters:
         self.curr_autonomy : float = autonomy
         self.__path : list[dict] = [] # List of trips with their respective coordinates. E.g [{"order_X": {"latitude": 37.7749, "longitude": -122.4194}}]
         
-        test = [
-            {"order_X": {"latitude": 37.7749, "longitude": -122.4194}},
-            {"order_Y": {"latitude": 37.7749, "longitude": -122.4194}},
-            {"center_Z": {"latitude": 37.7749, "longitude": -122.4194}},            
-        ]
-        
     def refill_autonomy(self, warehouse : dict) -> None:
         """
         Method to refill the drone's autonomy.
@@ -48,6 +42,12 @@ class DroneParameters:
         self.__total_trips += 1
         if (self.__distance_on_prev_trip > 0):
             self.add_trip(self.__distance_on_prev_trip)
+            
+    def is_out_of_autonomy(self) -> bool:
+        """
+        Method to check if the drone is out of autonomy.
+        """
+        return self.curr_autonomy < 0
 
 # ----------------------------------------------------------------------------------------------
     
@@ -100,8 +100,11 @@ class DroneParameters:
         """
         Method to update the distance covered by the drone.
         For visualization purposes only.
+        
+        Also updates the autonomy of the drone.
         """
         self.metrics_total_distance += distance
+        self.curr_autonomy -= distance
         
     def __str__(self) -> str:
         return "{} - Drone with capacity ({}/{}) and autonomy ({}/{}) delivering {} orders, with {} completed orders"\

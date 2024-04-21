@@ -65,9 +65,9 @@
       });
 
       var warehouseIcon = new L.Icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/3774/3774895.png',
         shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-        iconSize: [30.5, 50],
+        iconSize: [50, 50],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
         shadowSize: [50, 50]
@@ -129,8 +129,8 @@
 
           // Update the text content of the spans
           document.getElementById(name + '_distance').textContent = distance.toFixed(2);
-          document.getElementById(name + '_capacity').textContent = capacity.toFixed(2) + ' %';
-          document.getElementById(name + '_autonomy').textContent = autonomy.toFixed(2) + ' %';
+          document.getElementById(name + '_capacity').textContent = capacity.toFixed(2);
+          document.getElementById(name + '_autonomy').textContent = autonomy.toFixed(2);
           document.getElementById(name + '_orders_delivered').textContent = ordersDelivered;
           });
           

@@ -261,6 +261,9 @@ class OrdersMatrix:
             owner (str): The id of the owner of the order.
         """
         
+        if owner not in self.reserved_orders:
+            return
+        
         for order, i, j in self.reserved_orders[owner]:
             self.matrix[i, j].append(order)
             

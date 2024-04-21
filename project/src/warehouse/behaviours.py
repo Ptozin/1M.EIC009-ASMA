@@ -22,7 +22,7 @@ def get_next_behav(message : Message) :
     elif message.metadata[METADATA_NEXT_BEHAVIOUR] == PICKUP:
         return PickupOrdersBehaviour(sender=str(message.sender), message=message)
     else:
-        print("ERROR - Unknown next behaviour")
+        # In case of error
         return None
 
 # ----------------------------------------------------------------------------------------------
@@ -70,9 +70,7 @@ class SuggestOrderBehaviour(OneShotBehaviour):
         message.to = self.sender
         message.set_metadata("performative", "propose")
         message.body = json.dumps([order.__repr__() for order in orders])
-        
-        # print(f"Sending orders to {self.sender} - {message.body}")
-        
+                
         await self.send(message)
 
 # ----------------------------------------------------------------------------------------------
@@ -91,7 +89,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 self.agent.orders_to_be_picked[self.sender] = []
             # Reserve orders to drone
             orders = json.loads(self.message.body)
-            print("Inventory size Before: {}".format(len(self.agent.inventory)))
+            # print("Inventory size Before: {}".format(len(self.agent.inventory)))
             for order_str in orders:
                 order = json.loads(order_str)
                 
@@ -104,7 +102,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             # Undo reservations for orders the drone refused, if any
             self.agent.orders_matrix.undo_reservations(self.sender)
             
-            print("Inventory size After: {}".format(len(self.agent.inventory)))
+            # print("Inventory size After: {}".format(len(self.agent.inventory)))
 
 
         elif self.message.metadata["performative"] == "reject-proposal":

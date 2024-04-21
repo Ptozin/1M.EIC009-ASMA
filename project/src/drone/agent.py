@@ -19,7 +19,7 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 2000.0
+TIME_MULTIPLIER = 50000.0
 INTERVAL_BETWEEN_TICKS = 0.030
 
 # ----------------------------------------------------------------------------------------------
@@ -128,16 +128,11 @@ class DroneAgent(Agent):
         
         self.__distance_since_last_drop += distance
         self.params.update_distance(distance)
-                    
-        #self.params.curr_autonomy -= haversine_distance(
-        #    self.position['latitude'], self.position['longitude'],
-        #    position['latitude'], position['longitude']
-        #)
         
         self.position = position
         
-        if self.params.curr_autonomy < 0:
-            self.logger.log(f"Drone out of battery")
+        if self.params.is_out_of_autonomy():
+            self.logger.log(f"[MAJOR ERROR] Drone out of battery")
 
     def arrived_at_next_order(self):
         """

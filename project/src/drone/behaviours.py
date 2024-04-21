@@ -38,11 +38,11 @@ STATE_DEAD = "dead"
 class FSMBehaviour(FSMBehaviour):
     async def on_start(self):
         self.agent.logger.log(f"FSM starting at initial state {self.current_state}")
-        print(f"FSM starting at initial state {self.current_state}")
+        # print(f"FSM starting at initial state {self.current_state}")
 
     async def on_end(self):
         self.agent.logger.log(f"FSM finished at state {self.current_state}")
-        print(f"FSM finished at state {self.current_state}")
+        # print(f"FSM finished at state {self.current_state}")
         self.agent.need_to_stop = True
         orders_id = [order.id for order in self.agent.total_orders]
         
@@ -55,6 +55,7 @@ class AvailableBehaviour(State):
     async def run(self):
         self.agent.warehouses_responses = []
         warehouses = []
+        # TODO: what is this for?
         #if self.agent.required_warehouse is None:
         warehouses = self.agent.warehouse_positions.keys()
         #else:
@@ -82,7 +83,8 @@ class OrderSuggestionsBehaviour(State):
         self.agent.available_order_sets = {}
         responses = self.agent.warehouses_responses
         if not responses:
-            print("ERROR - No responses from warehouses")
+            self.agent.logger.log("[ERROR] - No responses from warehouses")
+            # print("ERROR - No responses from warehouses")
             self.set_next_state(STATE_DEAD)
             return
         for response in responses:
@@ -95,7 +97,8 @@ class OrderSuggestionsBehaviour(State):
         if self.agent.available_order_sets:
             await self._process_available_orders()
         else:
-            print("[FINISH] - No available orders")
+            self.agent.logger.log("[FINISH] - No available orders")
+            # print("[FINISH] - No available orders")
             self.set_next_state(STATE_DEAD)
     
     def _handle_proposal(self, response, sender):
@@ -119,6 +122,7 @@ class OrderSuggestionsBehaviour(State):
         self.agent.remove_warehouse(sender)
     
     async def _process_available_orders(self):
+        # TODO: what is the if statement for?
         winner, orders = self.agent.best_orders() #if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
         if winner:
             await self._send_proposal_accepted(winner, orders)
@@ -131,7 +135,6 @@ class OrderSuggestionsBehaviour(State):
             self.set_next_state(STATE_DELIVER)
     
     async def _send_proposal_accepted(self, winner, orders):
-        print(f"[NEW SUGGEST] - {winner} - {orders}")
         message = Message()
         message.to = winner + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
@@ -226,7 +229,7 @@ class DeliverOrdersBehaviour(State):
 
 class DeadBehaviour(State):
     async def run(self):
-        self.agent.logger.log("[DEAD BEHAVIOUR] - Drone out of battery or something like that")
+        self.agent.logger.log("[DEAD BEHAVIOUR] - Drone is out of orders or something went wrong.")
 
 # ----------------------------------------------------------------------------------------------
 
