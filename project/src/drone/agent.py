@@ -25,41 +25,51 @@ INTERVAL_BETWEEN_TICKS = 0.030
 # ----------------------------------------------------------------------------------------------
 
 class DroneAgent(Agent):
-    def __init__(self, id, jid, password, initialPos, capacity = 0, autonomy = 0, velocity = 0, warehouse_positions = {}, socketio : SocketIO = None) -> None:
+    """
+    DroneAgent class.
+    Defines the drone agent that will be used in the simulation.
+
+    Args:
+        Agent (Agent): The base class for all agents in the system.
+    """
+    def __init__(self, drone_id, jid, password, initialPos, capacity, autonomy,
+                 velocity, warehouse_positions, socketio : SocketIO) -> None:
         super().__init__(jid, password)
         self.total_orders : list[DeliveryOrder] = [] 
         self.next_orders : list[DeliveryOrder] = []
         self.next_order : DeliveryOrder = None
         self.next_warehouse : str = None
-        
+
         self.required_warehouse : str = None # warehouse drone needs to go when autonomy runs out
-        self.max_deliverable_order : DeliveryOrder = None # furthest order drone can deliver with autonomy leaving a warehouse
-        
+  
+        # furthest order drone can deliver with autonomy leaving a warehouse
+        self.max_deliverable_order : DeliveryOrder = None
+
         self.warehouse_positions : dict = warehouse_positions    
         self.distance_to_next_warehouse = 0.0
         self.available_order_sets : dict = {}
         self.orders_to_be_picked : dict[str, list[DeliveryOrder]] = {}
-    
+
         self.position = {
             "latitude": warehouse_positions[initialPos]["latitude"],
             "longitude": warehouse_positions[initialPos]["longitude"]
-        } 
-        
-        self.params = DroneParameters(id, capacity, autonomy, velocity)
-        self.logger = Logger(filename = id)
+        }
+
+        self.params = DroneParameters(drone_id, capacity, autonomy, velocity)
+        self.logger = Logger(filename = drone_id)
         self.socketio = socketio
         self.orders_to_visualize : list[DeliveryOrder] = []
-        
+
         self.need_to_stop = False
-        
+
         self.warehouses_responses = []
-        
+
         self.__distance_since_last_drop : float = 0.0
         self.tick_rate = INTERVAL_BETWEEN_TICKS
-        
+
         # Helper
         self.died_sucessfully : bool | None = None
-        
+
     async def setup(self) -> None:
         """
         Agent's setup method. It adds the IdleBehav behaviour.
@@ -72,17 +82,20 @@ class DroneAgent(Agent):
         fsm.add_state(name=STATE_PICKUP, state=PickupOrdersBehaviour())
         fsm.add_state(name=STATE_DELIVER, state=DeliverOrdersBehaviour())
         fsm.add_state(name=STATE_DEAD, state=DeadBehaviour())
+
+        # State transitions to normal states
         fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_SUGGEST)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_PICKUP)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_DELIVER)
         fsm.add_transition(source=STATE_PICKUP, dest=STATE_DELIVER)
         fsm.add_transition(source=STATE_DELIVER, dest=STATE_AVAILABLE)
-        
+
+        # State transitions to dead state
         fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_DEAD)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_DEAD)
         fsm.add_transition(source=STATE_PICKUP, dest=STATE_DEAD)
         fsm.add_transition(source=STATE_DELIVER, dest=STATE_DEAD)
-        
+
         self.add_behaviour(fsm)
 
     def __str__(self) -> str:
@@ -98,7 +111,13 @@ class DroneAgent(Agent):
         
     # ----------------------------------------------------------------------------------------------
 
-    def get_current_metrics(self):
+    def get_current_metrics(self) -> dict:
+        """
+        Method to get the current metrics of the drone.
+
+        Returns:
+            dict: The current metrics of the drone.
+        """
         return {
             'id': self.params.id,
             'latitude': self.position['latitude'],
@@ -118,6 +137,15 @@ class DroneAgent(Agent):
         self.params.refill_autonomy(warehouse)
 
     def update_position(self, target_latitude : float, target_longitude : float) -> None:
+        """
+        Method to update the drone's position.
+        Also updates the distance since the last drop and the autonomy.
+
+        Args:
+            target_latitude (float): The target latitude.
+            target_longitude (float): The target longitude.
+        """
+        
         self.logger.log("[TRAVELLING] - Distance to target: {} meters"\
             .format(round(haversine_distance(
                         self.position['latitude'], self.position['longitude'], 
@@ -133,9 +161,6 @@ class DroneAgent(Agent):
         self.params.update_distance(distance)
         
         self.position = position
-        
-        if self.params.is_out_of_autonomy():
-            self.logger.log(f"[ERROR] Drone out of battery")
 
     def arrived_at_next_order(self):
         """
@@ -212,7 +237,6 @@ class DroneAgent(Agent):
         Args:
             order (DeliveryOrder): The order to add.
         """
-        #TODO: verify if this doesn't f the frontend
         order.mark_as_taken()
         
         self.next_orders.append(order)
@@ -227,8 +251,9 @@ class DroneAgent(Agent):
         """
         
         order = self.next_orders.pop(0) 
-        self.logger.log("[DELIVERING] - Order {} delivered".format(order.id))
+        self.logger.log(f"[DELIVERING] - Order {order.id} delivered")
         self.params.drop_order(order.weight, self.__distance_since_last_drop,  order.get_order_destination_position())
+        
         # Only append the order to the total orders list if it has been delivered
         self.total_orders.append(order)
         

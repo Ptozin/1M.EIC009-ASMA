@@ -38,6 +38,12 @@ TIMEOUT = 2.0
 # ----------------------------------------------------------------------------------------------
 
 class FSMBehaviour(FSMBehaviour):
+    """
+    Defines the Finite State Machine Behaviour for the drone agent.
+
+    Args:
+        FSMBehaviour (FSMBehaviour): Base class for Finite State Machine Behaviours
+    """
     async def on_start(self):
         self.agent.logger.log(f"FSM starting at initial state {self.current_state}")
 
@@ -65,7 +71,7 @@ class AvailableBehaviour(State):
             message = Message()
             message.to = warehouse + "@localhost"
             message.body = self.agent.__repr__()
-            message.set_metadata("performative", "inform")
+            message.set_metadata("performative", "request")
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
             response = None
             
@@ -96,6 +102,7 @@ class OrderSuggestionsBehaviour(State):
             self.agent.died_successfully = False
             self.set_next_state(STATE_DEAD)
             return
+        
         for response in responses:
             performative = response.metadata.get("performative")
             sender = str(response.sender).split("@")[0]
@@ -177,6 +184,13 @@ class PickupOrdersBehaviour(State):
         while not self.agent.arrived_at_next_warehouse():
             next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
+            
+            if self.agent.params.is_out_of_autonomy():
+                self.agent.logger.log("[ERROR] Drone out of battery") 
+                self.agent.died_successfully = False
+                self.set_next_state(STATE_DEAD)
+                return
+            
             await asyncio.sleep(self.agent.tick_rate)
 
         if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
@@ -238,6 +252,13 @@ class DeliverOrdersBehaviour(State):
         while not self.agent.arrived_at_next_order():
             next_order_lat, next_order_lon = self.agent.get_next_order_position()
             self.agent.update_position(next_order_lat, next_order_lon)
+            
+            if self.agent.params.is_out_of_autonomy():
+                self.agent.logger.log("[ERROR] Drone out of battery") 
+                self.agent.died_successfully = False
+                self.set_next_state(STATE_DEAD)
+                return
+            
             await asyncio.sleep(self.agent.tick_rate)
             
         max_order = self.agent.next_order is not None and self.agent.next_order == self.agent.max_deliverable_order
@@ -250,12 +271,12 @@ class DeliverOrdersBehaviour(State):
                 self.agent.warehouse_positions
             )
             
-        # TODO: check if this fixes the killing behaviour
         if len(self.agent.warehouse_positions) == 0:
             self.agent.logger.log("[DELIVERING] - No warehouses left - Continuing to deliver orders...")
-            self.set_next_state(STATE_DELIVER)
-        else:  
-            self.set_next_state(STATE_AVAILABLE)
+        
+        # Even if there are no warehouses left, the drone will be sent to the available state
+        # There, it will check if there are any orders left to deliver and come back to this state
+        self.set_next_state(STATE_AVAILABLE)
 
 # ----------------------------------------------------------------------------------------------
 

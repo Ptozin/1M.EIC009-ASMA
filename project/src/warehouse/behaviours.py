@@ -45,9 +45,8 @@ class IdleBehaviour(CyclicBehaviour):
             if b is not None:
                 self.agent.add_behaviour(b)
             else:
-                self.agent.logger.log("[IDLE] - [ERROR] - Next behaviour is None")
-                self.kill()
-                return
+                self.agent.logger.log("[IDLE] - [ERROR] - Next behaviour is None. Ignoring message...")
+                
 
 # ----------------------------------------------------------------------------------------------
 
@@ -83,9 +82,10 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             
             if self.sender not in self.agent.orders_to_be_picked:
                 self.agent.orders_to_be_picked[self.sender] = []
+            
             # Reserve orders to drone
             orders = json.loads(self.message.body)
-            # print("Inventory size Before: {}".format(len(self.agent.inventory)))
+
             for order_str in orders:
                 order = json.loads(order_str)
                 
@@ -98,8 +98,6 @@ class DecideOrdersBehaviour(OneShotBehaviour):
             # Undo reservations for orders the drone refused, if any
             self.agent.orders_matrix.undo_reservations(self.sender)
             self.agent.logger.log(f"[DECIDING] - Orders remaining in inventory: {len(self.agent.inventory)}")
-            # print("Inventory size After: {}".format(len(self.agent.inventory)))
-
 
         elif self.message.metadata["performative"] == "reject-proposal":
             self.agent.logger.log(f"[DECIDING] - [REJECTED] - {self.sender}")
@@ -121,7 +119,7 @@ class PickupOrdersBehaviour(OneShotBehaviour):
         
         del self.agent.orders_to_be_picked[self.sender]
         
-        message = Message(to=self.sender)
+        message : Message = Message(to=self.sender)
         message.set_metadata("performative", "confirm")
 
         await self.send(message)
