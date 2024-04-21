@@ -129,10 +129,10 @@ class DroneAgent(Agent):
         self.__distance_since_last_drop += distance
         self.params.update_distance(distance)
                     
-        #self.params.curr_autonomy -= haversine_distance(
-        #    self.position['latitude'], self.position['longitude'],
-        #    position['latitude'], position['longitude']
-        #)
+        self.params.curr_autonomy -= haversine_distance(
+            self.position['latitude'], self.position['longitude'],
+            position['latitude'], position['longitude']
+        )
         
         self.position = position
         

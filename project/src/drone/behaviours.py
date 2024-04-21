@@ -55,10 +55,10 @@ class AvailableBehaviour(State):
     async def run(self):
         self.agent.warehouses_responses = []
         warehouses = []
-        #if self.agent.required_warehouse is None:
-        warehouses = self.agent.warehouse_positions.keys()
-        #else:
-        #    warehouses = [self.agent.required_warehouse]
+        if self.agent.required_warehouse is None:
+            warehouses = self.agent.warehouse_positions.keys()
+        else:
+            warehouses = [self.agent.required_warehouse]
         for warehouse in warehouses:
             message = Message()
             message.to = warehouse + "@localhost"
@@ -104,22 +104,20 @@ class OrderSuggestionsBehaviour(State):
         orders = [DeliveryOrder(**json.loads(order)) for order in proposed_orders]
         self.agent.logger.log(f"PROPOSED ORDERS: {orders}")
         self.agent.logger.log(f"CURR CAPACITY: {self.agent.params.max_capacity - self.agent.params.curr_capacity}")
-        order_choices = best_available_orders(
+        self.agent.available_order_sets[sender] = best_available_orders(
             orders,
             self.agent.warehouse_positions[sender]["latitude"],
             self.agent.warehouse_positions[sender]["longitude"],
             self.agent.params.max_capacity - self.agent.params.curr_capacity,
             self.agent.params.max_autonomy
         )
-        #if order_choices:
-        self.agent.available_order_sets[sender] = order_choices
     
     def _handle_refusal(self, sender):
         self.agent.logger.log(f"[REFUSED] - {sender}")
         self.agent.remove_warehouse(sender)
     
     async def _process_available_orders(self):
-        winner, orders = self.agent.best_orders() #if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
+        winner, orders = self.agent.best_orders() if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
         if winner:
             await self._send_proposal_accepted(winner, orders)
             self.agent.next_warehouse = winner
@@ -136,7 +134,7 @@ class OrderSuggestionsBehaviour(State):
         message.to = winner + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
         message.set_metadata("performative", "accept-proposal")
-        message.body = json.dumps([order.__repr__() for order in orders])
+        message.body = json.dumps([order.__repr__() for order in orders] if orders else [])
         await self.send(message)
         self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
         losers = [warehouse for warehouse in self.agent.available_order_sets.keys() if warehouse != winner]
@@ -152,13 +150,83 @@ class OrderSuggestionsBehaviour(State):
         self.agent.logger.log("[DECIDED] - None - None")
 
 # ----------------------------------------------------------------------------------------------
-              
+
 class PickupOrdersBehaviour(State):
     async def run(self):
         while not self.agent.arrived_at_next_warehouse():
             next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
             self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
             await asyncio.sleep(self.agent.tick_rate)
+
+        if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
+            self.handle_no_orders_to_pick()
+        else:
+            await self.pickup_orders()
+
+    def handle_no_orders_to_pick(self):
+        if self.agent.next_orders:
+            closest_order_warehouse = closest_order(
+                self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
+                self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
+                self.agent.next_orders
+            )
+            self.update_after_pickup(closest_order_warehouse)
+        else:
+            self.set_next_state(STATE_AVAILABLE)
+
+    async def pickup_orders(self):
+        orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
+        message = Message()
+        message.to = self.agent.next_warehouse + "@localhost"
+        message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
+        message.body = json.dumps(orders_id)
+        await self.send(message)
+        response = await self.receive(timeout=5)
+        if response and response.metadata["performative"] == "confirm":
+            self.agent.logger.log("[PICKUP] - {} Orders picked up at {}".format(len(orders_id), self.agent.next_warehouse))
+            self.agent.recharge()
+            for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
+                self.agent.add_order(order)
+            del self.agent.orders_to_be_picked[self.agent.next_warehouse]
+            closest_order_next_warehouse = closest_order(
+                self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
+                self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
+                self.agent.next_orders
+            )
+            self.update_after_pickup(closest_order_next_warehouse)
+        else:
+            self.agent.logger.log("[ERROR] - Orders not picked up")
+            self.set_next_state(STATE_DEAD)
+
+    def update_after_pickup(self, closest_order_next_warehouse):
+        self.agent.next_order = closest_order_next_warehouse
+        self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
+        self.agent.tasks_in_range()
+        self.set_next_state(STATE_DELIVER)
+
+'''
+class PickupOrdersBehaviour(State):
+    async def run(self):
+        while not self.agent.arrived_at_next_warehouse():
+            next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
+            self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
+            await asyncio.sleep(self.agent.tick_rate)
+            
+        if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
+            if self.agent.next_orders:
+                closest_order_next_warehouse = closest_order(
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
+                    self.agent.next_orders
+                )
+                self.agent.next_order = closest_order_next_warehouse
+                self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
+                self.agent.tasks_in_range()
+                self.set_next_state(STATE_DELIVER)
+                return
+            else:
+                self.set_next_state(STATE_AVAILABLE)
+                return
             
         message = Message()
         message.to = self.agent.next_warehouse + "@localhost"
@@ -171,10 +239,8 @@ class PickupOrdersBehaviour(State):
         if response is not None:
             if response.metadata["performative"] == "confirm":
                 self.agent.logger.log("[PICKUP] - {} Orders picked up at {}".format(len(orders_id), self.agent.next_warehouse))
-                #TODO: recover autonomy, for now refills it
                 self.agent.recharge()
-                
-                #print("ORDERS TO BE PICKED", self.agent.params.id, self.agent.orders_to_be_picked[self.agent.next_warehouse])
+
                 for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
                     self.agent.add_order(order)
                 
@@ -187,8 +253,7 @@ class PickupOrdersBehaviour(State):
                 )
                 self.agent.next_order = closest_order_next_warehouse
                 self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
-   
-                #self.agent.tasks_in_range()
+                self.agent.tasks_in_range()
                 self.set_next_state(STATE_DELIVER)
             else:
                 self.agent.logger.log("[ERROR] - Orders not picked up")
@@ -196,6 +261,7 @@ class PickupOrdersBehaviour(State):
         else:
             self.agent.logger.log("[ERROR] - No response from warehouse")
             self.set_next_state(STATE_DEAD)
+'''
         
 # ----------------------------------------------------------------------------------------------
 
@@ -211,14 +277,14 @@ class DeliverOrdersBehaviour(State):
             self.agent.update_position(next_order_lat, next_order_lon)
             await asyncio.sleep(self.agent.tick_rate)
             
-        #max_order = self.agent.next_order is not None and self.agent.next_order == self.agent.max_deliverable_order
+        max_order = self.agent.next_order is not None and self.agent.next_order == self.agent.max_deliverable_order
         self.agent.drop_order()    
-        #if max_order:
-        #    self.agent.required_warehouse = closest_warehouse(
-        #        self.agent.position["latitude"],
-        #        self.agent.position["longitude"],
-        #        self.agent.warehouse_positions
-        #    )
+        if max_order:
+            self.agent.required_warehouse = closest_warehouse(
+                self.agent.position["latitude"],
+                self.agent.position["longitude"],
+                self.agent.warehouse_positions
+            )
             
         self.set_next_state(STATE_AVAILABLE)
 
