@@ -81,79 +81,70 @@ class OrderSuggestionsBehaviour(State):
     async def run(self):
         self.agent.available_order_sets = {}
         responses = self.agent.warehouses_responses
-        if responses == []:
+        if not responses:
             print("ERROR - No responses from warehouses")
             self.set_next_state(STATE_DEAD)
             return
-        
         for response in responses:
-            if response.metadata["performative"] == "propose":
-                self.agent.logger.log(f"[PROPOSED] - {str(response.sender)}")
-                warehouse = str(response.sender).split("@")[0]
-                proposed_orders = json.loads(response.body)
-                orders = []
-                
-                for order in proposed_orders:
-                    order = json.loads(order)
-                    orders.append(DeliveryOrder(**order))
-                    order_choices = best_available_orders(
-                        orders, 
-                        self.agent.warehouse_positions[warehouse]["latitude"],
-                        self.agent.warehouse_positions[warehouse]["longitude"],
-                        self.agent.params.max_capacity, 
-                        self.agent.params.velocity
-                    )
-                if proposed_orders != []:
-                    self.agent.available_order_sets[str(response.sender).split("@")[0]] = order_choices
-            elif response.metadata["performative"] == "refuse":
-                # this means that the warehouse has no orders to suggest
-                self.agent.logger.log(f"[REFUSED] - {str(response.sender)}")
-                self.agent.remove_warehouse(str(response.sender).split("@")[0])
-        
-        # if there are none, then there aren't available warehouses, so the drone should kiss the ground
-        if len(self.agent.available_order_sets) > 0:
-            winner, orders = None, []
-            
-            if self.agent.required_warehouse is not None:
-                winner = self.agent.required_warehouse
-                orders = self.agent.available_order_sets[winner]
-                self.agent.max_deliverable_order = None
-                self.agent.required_warehouse = None
-                print(f"[NEW SUGGEST] - {winner} - {orders}")
-                self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
-                self.set_next_state(STATE_PICKUP)
-                return
-            
-            winner, orders = self.agent.best_orders()
-            print(f"[SUGGEST] {self.agent.params.id} - {winner} - {orders}")
-            self.agent.orders_to_be_picked[winner] = self.agent.available_order_sets[winner]
-            
-            if winner is None:
-                for warehouse in self.agent.available_order_sets.keys():
-                    message = Message()
-                    message.to = warehouse + "@localhost"
-                    message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
-                    message.set_metadata("performative", "reject-proposal")                        
-                    await self.send(message)
-            else:
-                for warehouse in self.agent.available_order_sets.keys():
-                    message = Message()
-                    message.to = warehouse + "@localhost"
-                    message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
-                    if warehouse == winner:
-                        message.set_metadata("performative", "accept-proposal")
-                        message.body = json.dumps([order.__repr__() for order in orders])
-                        self.agent.next_warehouse = warehouse
-                        await self.send(message)
-                    else:
-                        message.set_metadata("performative", "reject-proposal")                        
-                        await self.send(message)
-
-            self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+            performative = response.metadata.get("performative")
+            sender = str(response.sender).split("@")[0]
+            if performative == "propose":
+                self._handle_proposal(response, sender)
+            elif performative == "refuse":
+                self._handle_refusal(sender)
+        if self.agent.available_order_sets:
+            await self._process_available_orders()
+        else:
+            print("[FINISH] - No available orders")
+            self.set_next_state(STATE_DEAD)
+    
+    def _handle_proposal(self, response, sender):
+        self.agent.logger.log(f"[PROPOSED] - {sender}")
+        proposed_orders = json.loads(response.body)
+        orders = [DeliveryOrder(**json.loads(order)) for order in proposed_orders]
+        order_choices = best_available_orders(
+            orders,
+            self.agent.warehouse_positions[sender]["latitude"],
+            self.agent.warehouse_positions[sender]["longitude"],
+            self.agent.params.max_capacity,
+            self.agent.params.velocity
+        )
+        if order_choices:
+            self.agent.available_order_sets[sender] = order_choices
+    
+    def _handle_refusal(self, sender):
+        self.agent.logger.log(f"[REFUSED] - {sender}")
+        self.agent.remove_warehouse(sender)
+    
+    async def _process_available_orders(self):
+        winner, orders = self.agent.best_orders() if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
+        if winner:
+            await self._send_proposal_accepted(winner, orders)
+            self.agent.next_warehouse = winner
+            self.agent.orders_to_be_picked[winner] = orders
             self.set_next_state(STATE_PICKUP)
         else:
-            self.agent.logger.log("[FINISH] - No available orders")
-            self.set_next_state(STATE_DEAD)
+            await self._send_proposal_rejected()
+            self.set_next_state(STATE_DELIVER)
+    
+    async def _send_proposal_accepted(self, winner, orders):
+        print(f"[NEW SUGGEST] - {winner} - {orders}")
+        message = Message()
+        message.to = winner + "@localhost"
+        message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
+        message.set_metadata("performative", "accept-proposal")
+        message.body = json.dumps([order.__repr__() for order in orders])
+        await self.send(message)
+        self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+    
+    async def _send_proposal_rejected(self):
+        for warehouse in self.agent.available_order_sets.keys():
+            message = Message()
+            message.to = warehouse + "@localhost"
+            message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
+            message.set_metadata("performative", "reject-proposal")
+            await self.send(message)
+        self.agent.logger.log("[DECIDED] - None - None")
 
 # ----------------------------------------------------------------------------------------------
               
@@ -168,13 +159,14 @@ class PickupOrdersBehaviour(State):
         message = Message()
         message.to = self.agent.next_warehouse + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
-                
+            
+        print("NEXT WAREHOUSE ", self.agent.next_warehouse)
+        print("ORDERS TO BE PICKED ", self.agent.orders_to_be_picked[self.agent.next_warehouse])
         orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
         message.body = json.dumps(orders_id)
                 
         await self.send(message)
         response = await self.receive(timeout=5)
-        
         
         if response is not None:
             if response.metadata["performative"] == "confirm":

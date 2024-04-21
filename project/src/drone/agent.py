@@ -19,7 +19,7 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 5000.0
+TIME_MULTIPLIER = 2000.0
 INTERVAL_BETWEEN_TICKS = 0.030
 
 # ----------------------------------------------------------------------------------------------
@@ -72,6 +72,7 @@ class DroneAgent(Agent):
         fsm.add_state(name=STATE_DEAD, state=DeadBehaviour())
         fsm.add_transition(source=STATE_AVAILABLE, dest=STATE_SUGGEST)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_PICKUP)
+        fsm.add_transition(source=STATE_SUGGEST, dest=STATE_DELIVER)
         fsm.add_transition(source=STATE_PICKUP, dest=STATE_DELIVER)
         fsm.add_transition(source=STATE_DELIVER, dest=STATE_AVAILABLE)
         
