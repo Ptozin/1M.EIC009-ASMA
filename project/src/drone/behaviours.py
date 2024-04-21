@@ -33,16 +33,16 @@ STATE_RECHARGE = "recharge"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
+TRIES = 3
+
 # ----------------------------------------------------------------------------------------------
 
 class FSMBehaviour(FSMBehaviour):
     async def on_start(self):
         self.agent.logger.log(f"FSM starting at initial state {self.current_state}")
-        # print(f"FSM starting at initial state {self.current_state}")
 
     async def on_end(self):
         self.agent.logger.log(f"FSM finished at state {self.current_state}")
-        # print(f"FSM finished at state {self.current_state}")
         self.agent.need_to_stop = True
         orders_id = [order.id for order in self.agent.total_orders]
         
@@ -62,6 +62,9 @@ class AvailableBehaviour(State):
             warehouses = self.agent.warehouse_positions.keys()
         else:
             warehouses = [self.agent.required_warehouse]
+           
+        # TODO: remove this after making sure required_warehouse does what is expected 
+        warehouses = self.agent.warehouse_positions.keys()
         # --
         
         for warehouse in warehouses:
@@ -70,12 +73,18 @@ class AvailableBehaviour(State):
             message.body = self.agent.__repr__()
             message.set_metadata("performative", "inform")
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
-            await self.send(message)
-            response = await self.receive(timeout=5)
-            if response is not None:
-                self.agent.warehouses_responses.append(response)
-            else:
-                self.agent.logger.log("[ERROR] - No response from warehouse")
+            response = None
+            for _ in range(TRIES):
+                await self.send(message)
+                response = await self.receive(timeout=5)
+                if response is not None:
+                    self.agent.warehouses_responses.append(response)
+                    break
+                else:
+                    self.agent.logger.log(f"[ERROR] - No response from warehouse {warehouse}, trying again...")
+            if response is None:
+                self.agent.logger.log(f"[ERROR] - No response from warehouse {warehouse} - {warehouse in self.agent.warehouse_positions.keys()}")
+                self.agent.died_successfully = False
                 self.set_next_state(STATE_DEAD)
                 return
         self.set_next_state(STATE_SUGGEST)
@@ -88,7 +97,7 @@ class OrderSuggestionsBehaviour(State):
         responses = self.agent.warehouses_responses
         if not responses:
             self.agent.logger.log("[ERROR] - No responses from warehouses")
-            # print("ERROR - No responses from warehouses")
+            self.agent.died_successfully = False
             self.set_next_state(STATE_DEAD)
             return
         for response in responses:
@@ -102,7 +111,7 @@ class OrderSuggestionsBehaviour(State):
             await self._process_available_orders()
         else:
             self.agent.logger.log("[FINISH] - No available orders")
-            # print("[FINISH] - No available orders")
+            self.agent.died_successfully = True
             self.set_next_state(STATE_DEAD)
     
     def _handle_proposal(self, response, sender):
@@ -203,6 +212,7 @@ class PickupOrdersBehaviour(State):
             self.update_after_pickup(closest_order_next_warehouse)
         else:
             self.agent.logger.log("[ERROR] - Orders not picked up")
+            self.agent.died_successfully = False
             self.set_next_state(STATE_DEAD)
 
     def update_after_pickup(self, closest_order_next_warehouse):
@@ -210,65 +220,6 @@ class PickupOrdersBehaviour(State):
         self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
         self.agent.tasks_in_range()
         self.set_next_state(STATE_DELIVER)
-
-'''
-class PickupOrdersBehaviour(State):
-    async def run(self):
-        while not self.agent.arrived_at_next_warehouse():
-            next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
-            self.agent.update_position(next_warehouse_lat, next_warehouse_lon)
-            await asyncio.sleep(self.agent.tick_rate)
-            
-        if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
-            if self.agent.next_orders:
-                closest_order_next_warehouse = closest_order(
-                    self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
-                    self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
-                    self.agent.next_orders
-                )
-                self.agent.next_order = closest_order_next_warehouse
-                self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
-                self.agent.tasks_in_range()
-                self.set_next_state(STATE_DELIVER)
-                return
-            else:
-                self.set_next_state(STATE_AVAILABLE)
-                return
-            
-        message = Message()
-        message.to = self.agent.next_warehouse + "@localhost"
-        message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
-        orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
-        message.body = json.dumps(orders_id)
-        await self.send(message)
-        response = await self.receive(timeout=5)
-        
-        if response is not None:
-            if response.metadata["performative"] == "confirm":
-                self.agent.logger.log("[PICKUP] - {} Orders picked up at {}".format(len(orders_id), self.agent.next_warehouse))
-                self.agent.recharge()
-
-                for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
-                    self.agent.add_order(order)
-                
-                del self.agent.orders_to_be_picked[self.agent.next_warehouse]
-                
-                closest_order_next_warehouse = closest_order(
-                    self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
-                    self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
-                    self.agent.next_orders
-                )
-                self.agent.next_order = closest_order_next_warehouse
-                self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
-                self.agent.tasks_in_range()
-                self.set_next_state(STATE_DELIVER)
-            else:
-                self.agent.logger.log("[ERROR] - Orders not picked up")
-                self.set_next_state(STATE_DEAD)
-        else:
-            self.agent.logger.log("[ERROR] - No response from warehouse")
-            self.set_next_state(STATE_DEAD)
-'''
         
 # ----------------------------------------------------------------------------------------------
 
@@ -299,7 +250,10 @@ class DeliverOrdersBehaviour(State):
 
 class DeadBehaviour(State):
     async def run(self):
-        self.agent.logger.log("[DEAD BEHAVIOUR] - Drone is out of orders or something went wrong.")
+        if self.agent.died_successfully:
+            self.agent.logger.log("[DEAD BEHAVIOUR] - Drone successfully completed its mission.")
+        else:
+            self.agent.logger.log("[DEAD BEHAVIOUR] - Something went wrong.")
 
 # ----------------------------------------------------------------------------------------------
 

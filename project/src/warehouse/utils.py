@@ -161,28 +161,17 @@ class OrdersMatrix:
         # Perform spiral traversal to retrieve orders
         while queue:
             x, y = queue.popleft()
-            
-            # print(f"Retrieving orders from cell ({x}, {y})")
-            
+                        
             # Retrieve orders in the current cell
             cell_orders = self.matrix[x, y]
             
-            # Calculate the weight of orders in the current cell
-            cell_weight = sum(order.weight for order in cell_orders)
-            
-            
-            # If adding orders from this cell exceeds the total capacity, stop traversal
-            if total_weight + cell_weight > total_orders_capacity:
-                for order in cell_orders:
-                    if order.weight + total_weight < total_orders_capacity:
-                        orders.append(order)
-                        total_weight += order.weight
+            for order in cell_orders:
+                if order.weight <= capacity and order.weight + total_weight <= total_orders_capacity:
+                    orders.append(order)
+                    total_weight += order.weight
+                    
+            if total_weight == total_orders_capacity:
                 break
-            else:
-                orders.extend(cell_orders)
-            
-            # Add orders from this cell to the list of retrieved orders
-            total_weight += cell_weight
             
             # Explore neighboring cells in all directions
             for dx, dy in directions:
@@ -201,7 +190,7 @@ class OrdersMatrix:
                 order.id, 
                 owner
             )
-        
+                    
         return orders
     
     # ----------------------------------------------------------------------------------------------

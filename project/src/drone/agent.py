@@ -57,6 +57,9 @@ class DroneAgent(Agent):
         self.__distance_since_last_drop : float = 0.0
         self.tick_rate = INTERVAL_BETWEEN_TICKS
         
+        # Helper
+        self.died_sucessfully : bool | None = None
+        
     async def setup(self) -> None:
         """
         Agent's setup method. It adds the IdleBehav behaviour.
