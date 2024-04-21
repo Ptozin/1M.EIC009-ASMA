@@ -11,47 +11,43 @@ SUGGEST= "suggest"
 DECIDE = "decide"
 PICKUP = "pickup_orders"
 
-# ----------------------------------------------------------------------------------------------
+TIMEOUT = 2.0
 
-def get_next_behav(message : Message) :
-    if message.metadata[METADATA_NEXT_BEHAVIOUR] == SUGGEST:
-        capacity = json.loads(message.body)["capacity"]
-        return SuggestOrderBehaviour(sender=str(message.sender), drone_capacity=capacity)
-    elif message.metadata[METADATA_NEXT_BEHAVIOUR] == DECIDE:
-        return DecideOrdersBehaviour(sender=str(message.sender), message=message)
-    elif message.metadata[METADATA_NEXT_BEHAVIOUR] == PICKUP:
-        return PickupOrdersBehaviour(sender=str(message.sender), message=message)
-    else:
-        # In case of error
-        return None
 
 # ----------------------------------------------------------------------------------------------
 
 class IdleBehaviour(CyclicBehaviour):
     
-    async def run(self):
+    def get_next_behav(self, message : Message) :
         if len(self.agent.inventory) == 0 and self.agent.orders_to_be_picked == {}:
             self.agent.logger.log("[IDLE] - No orders to be picked")
-            self.kill()
-            return
+            return DismissBehaviour(message=message)
         
-        message = await self.receive(timeout=5)
+        if message.metadata[METADATA_NEXT_BEHAVIOUR] == SUGGEST:
+            capacity = json.loads(message.body)["capacity"]
+            return SuggestOrderBehaviour(sender=str(message.sender), drone_capacity=capacity)
+        elif message.metadata[METADATA_NEXT_BEHAVIOUR] == DECIDE:
+            return DecideOrdersBehaviour(sender=str(message.sender), message=message)
+        elif message.metadata[METADATA_NEXT_BEHAVIOUR] == PICKUP:
+            return PickupOrdersBehaviour(sender=str(message.sender), message=message)
+        else:
+            # In case of error
+            return None
+    
+    async def run(self):
+        message = await self.receive(timeout=TIMEOUT)
         if message is None:
-            self.agent.logger.log("[IDLE] Waiting for available drones...")
+            self.agent.logger.log("[IDLE] Waiting for available drones... Didn't receive any message.")
         else:
             self.agent.logger.log("[IDLE] - [MESSAGE] - from {} with metadata :{}".format( str(message.sender), str(message.metadata)))
             
-            b = get_next_behav(message)
+            b = self.get_next_behav(message)
             if b is not None:
                 self.agent.add_behaviour(b)
             else:
                 self.agent.logger.log("[IDLE] - [ERROR] - Next behaviour is None")
                 self.kill()
                 return
-            
-            
-    async def on_end(self):
-        self.agent.add_behaviour(DismissBehaviour()) 
 
 # ----------------------------------------------------------------------------------------------
 
@@ -101,7 +97,7 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 
             # Undo reservations for orders the drone refused, if any
             self.agent.orders_matrix.undo_reservations(self.sender)
-            
+            self.agent.logger.log(f"[DECIDING] - Orders remaining in inventory: {len(self.agent.inventory)}")
             # print("Inventory size After: {}".format(len(self.agent.inventory)))
 
 
@@ -132,14 +128,18 @@ class PickupOrdersBehaviour(OneShotBehaviour):
           
 # ----------------------------------------------------------------------------------------------
 
-class DismissBehaviour(CyclicBehaviour):    
+class DismissBehaviour(OneShotBehaviour):  
+    def __init__(self, message : Message):
+        super().__init__()
+        self.message : Message = message
+        
+      
     async def run(self):
-        message = await self.receive(timeout=5)
-        if message is None:
+        if self.message is None:
             self.agent.logger.log(f"[REFUSING] - Waiting for drones to refuse...")
         else:
-            self.agent.logger.log(f"[REFUSING] - [MESSAGE] {str(message.sender)}")
-            message = Message(to=str(message.sender))
+            self.agent.logger.log(f"[REFUSING] - [MESSAGE] {str(self.message.sender)}")
+            message = Message(to=str(self.message.sender))
             message.set_metadata("performative", "refuse")
             await self.send(message)
         
