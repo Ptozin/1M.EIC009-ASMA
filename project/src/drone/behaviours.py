@@ -29,11 +29,11 @@ METADATA_NEXT_BEHAVIOUR = "next_behaviour"
 STATE_AVAILABLE = "available"
 STATE_SUGGEST = "suggest"
 STATE_PICKUP = "pickup"
-STATE_RECHARGE = "recharge"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
 TRIES = 3
+TIMEOUT = 2.0
 
 # ----------------------------------------------------------------------------------------------
 
@@ -55,17 +55,11 @@ class AvailableBehaviour(State):
     async def run(self):
         self.agent.warehouses_responses = []
         
-        # TODO: Is this really necessary?
-        # --
         warehouses = []
         if self.agent.required_warehouse is None:
             warehouses = self.agent.warehouse_positions.keys()
         else:
             warehouses = [self.agent.required_warehouse]
-           
-        # TODO: remove this after making sure required_warehouse does what is expected 
-        warehouses = self.agent.warehouse_positions.keys()
-        # --
         
         for warehouse in warehouses:
             message = Message()
@@ -74,14 +68,16 @@ class AvailableBehaviour(State):
             message.set_metadata("performative", "inform")
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, SUGGEST_ORDER)
             response = None
+            
             for _ in range(TRIES):
                 await self.send(message)
-                response = await self.receive(timeout=5)
+                response = await self.receive(timeout=TIMEOUT)
                 if response is not None:
                     self.agent.warehouses_responses.append(response)
                     break
                 else:
                     self.agent.logger.log(f"[ERROR] - No response from warehouse {warehouse}, trying again...")
+                    
             if response is None:
                 self.agent.logger.log(f"[ERROR] - No response from warehouse {warehouse} - {warehouse in self.agent.warehouse_positions.keys()}")
                 self.agent.died_successfully = False
@@ -109,8 +105,11 @@ class OrderSuggestionsBehaviour(State):
                 self._handle_refusal(sender)
         if self.agent.available_order_sets:
             await self._process_available_orders()
+        elif self.agent.has_inventory():
+            self.agent.logger.log("[ORDER SUGGESTION] - No available orders - Delivering remaining orders...")
+            self.set_next_state(STATE_DELIVER)
         else:
-            self.agent.logger.log("[FINISH] - No available orders")
+            self.agent.logger.log(f"[FINISH] - No available orders - {self.agent.has_inventory()}")
             self.agent.died_successfully = True
             self.set_next_state(STATE_DEAD)
     
@@ -133,8 +132,14 @@ class OrderSuggestionsBehaviour(State):
         self.agent.remove_warehouse(sender)
     
     async def _process_available_orders(self):
-        # TODO: what is the if statement for?
-        winner, orders = self.agent.best_orders() # if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
+        # TODO: what is the if statement for? It is killing the program, need to check this ASAP
+        #if self.agent.required_warehouse is None:
+        #    winner, orders = self.agent.best_orders()
+        #else:
+        #    winner, orders = self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse]
+        
+        winner, orders = self.agent.best_orders()
+        
         if winner:
             await self._send_proposal_accepted(winner, orders)
             self.agent.next_warehouse = winner
@@ -197,9 +202,9 @@ class PickupOrdersBehaviour(State):
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
         message.body = json.dumps(orders_id)
         await self.send(message)
-        response = await self.receive(timeout=5)
+        response = await self.receive(timeout=TIMEOUT)
         if response and response.metadata["performative"] == "confirm":
-            self.agent.logger.log("[PICKUP] - {} Orders picked up at {}".format(len(orders_id), self.agent.next_warehouse))
+            self.agent.logger.log("[PICKUP] - {} Orders picked up at {} - {}".format(len(orders_id), self.agent.next_warehouse, orders_id))
             self.agent.recharge()
             for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
                 self.agent.add_order(order)
@@ -236,6 +241,7 @@ class DeliverOrdersBehaviour(State):
             await asyncio.sleep(self.agent.tick_rate)
             
         max_order = self.agent.next_order is not None and self.agent.next_order == self.agent.max_deliverable_order
+
         self.agent.drop_order()    
         if max_order:
             self.agent.required_warehouse = closest_warehouse(
@@ -244,7 +250,12 @@ class DeliverOrdersBehaviour(State):
                 self.agent.warehouse_positions
             )
             
-        self.set_next_state(STATE_AVAILABLE)
+        # TODO: check if this fixes the killing behaviour
+        if len(self.agent.warehouse_positions) == 0:
+            self.agent.logger.log("[DELIVERING] - No warehouses left - Continuing to deliver orders...")
+            self.set_next_state(STATE_DELIVER)
+        else:  
+            self.set_next_state(STATE_AVAILABLE)
 
 # ----------------------------------------------------------------------------------------------
 

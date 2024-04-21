@@ -135,7 +135,7 @@ class DroneAgent(Agent):
         self.position = position
         
         if self.params.is_out_of_autonomy():
-            self.logger.log(f"[MAJOR ERROR] Drone out of battery")
+            self.logger.log(f"[ERROR] Drone out of battery")
 
     def arrived_at_next_order(self):
         """
@@ -243,12 +243,15 @@ class DroneAgent(Agent):
     
     def tasks_in_range(self) -> None:
         '''
-        Method that checks the furthest order that can be delivered with autonomy, after having next orders defined in a warehouse.
+        Method that checks the furthest order that can be delivered with autonomy, 
+        after having next orders defined in a warehouse.
         '''
+        
         self.required_warehouse = None
         self.max_deliverable_order = None
         distance_max_order = 0.0
         current_position = self.position
+        
         for order in self.next_orders:
             distance_max_order += haversine_distance(
                 current_position['latitude'], 
@@ -272,19 +275,20 @@ class DroneAgent(Agent):
             if total_required_distance <= self.params.curr_autonomy:
                 self.max_deliverable_order = order
                 break
+        
         if self.max_deliverable_order == self.next_orders[-1]:
             self.max_deliverable_order = None
     
     # ----------------------------------------------------------------------------------------------
 
-    def best_orders(self) -> tuple[str, list[DeliveryOrder]]:
+    def best_orders(self) -> tuple[None|str, list[DeliveryOrder]]:
         """
         Method to select the best orders for the drone from the available warehouses.
 
         Returns:
-            tuple[str, list[DeliveryOrder]]: The warehouse id and the list of orders to pick up.
+            tuple[None|str, list[DeliveryOrder]]: The warehouse id and the list of orders to pick up.
         """
-        winner = None
+        winner : str | None = None
         drone_utility = float('-inf')
         
         if self.next_orders:

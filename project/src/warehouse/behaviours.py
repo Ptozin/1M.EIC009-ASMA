@@ -117,7 +117,7 @@ class PickupOrdersBehaviour(OneShotBehaviour):
     async def run(self):
         orders = self.agent.orders_to_be_picked[self.sender]
         for order in orders:
-            self.agent.logger.log(f"[PICKUP] - {order}")
+            self.agent.logger.log(f"[PICKUP] - {order} - from {self.sender}")
         
         del self.agent.orders_to_be_picked[self.sender]
         
