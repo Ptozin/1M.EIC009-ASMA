@@ -33,7 +33,7 @@ STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
 TRIES = 3
-TIMEOUT = 2.0
+TIMEOUT = 5.0
 
 # ----------------------------------------------------------------------------------------------
 
@@ -97,6 +97,10 @@ class OrderSuggestionsBehaviour(State):
     async def run(self):
         self.agent.available_order_sets = {}
         responses = self.agent.warehouses_responses
+        if not responses and self.agent.has_inventory():
+            self.agent.logger.log("[WARN] - No responses from warehouses - Delivering remaining orders...")
+            self.set_next_state(STATE_DELIVER)
+            return
         if not responses:
             self.agent.logger.log("[ERROR] - No responses from warehouses")
             self.agent.died_successfully = False
@@ -139,12 +143,6 @@ class OrderSuggestionsBehaviour(State):
         self.agent.remove_warehouse(sender)
     
     async def _process_available_orders(self):
-        # TODO: what is the if statement for? It is killing the program, need to check this ASAP
-        #if self.agent.required_warehouse is None:
-        #    winner, orders = self.agent.best_orders()
-        #else:
-        #    winner, orders = self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse]
-        
         winner, orders = self.agent.best_orders()
         
         if winner:
@@ -196,8 +194,37 @@ class PickupOrdersBehaviour(State):
         if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
             self.handle_no_orders_to_pick()
         else:
-            await self.pickup_orders()
-
+            # Pick up orders
+            orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
+            message = Message()
+            message.to = self.agent.next_warehouse + "@localhost"
+            message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
+            message.body = json.dumps(orders_id)
+            await self.send(message)            
+            
+            response = await self.receive(timeout=TIMEOUT)
+            
+            if response and response.metadata["performative"] == "confirm":
+                self.agent.logger.log("[PICKUP] - {} Orders picked up at {} - {}".format(len(orders_id), self.agent.next_warehouse, orders_id))
+                self.agent.recharge()
+                
+                for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
+                    self.agent.add_order(order)
+                
+                del self.agent.orders_to_be_picked[self.agent.next_warehouse]
+                
+                closest_order_next_warehouse = closest_order(
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
+                    self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
+                    self.agent.next_orders
+                )
+                
+                self.update_after_pickup(closest_order_next_warehouse)
+            else:
+                self.agent.logger.log(f"[ERROR] - Orders not picked up - {response.metadata} - {orders_id}")
+                self.agent.died_successfully = False
+                self.set_next_state(STATE_DEAD)
+                
     def handle_no_orders_to_pick(self):
         if self.agent.next_orders:
             closest_order_warehouse = closest_order(
@@ -208,31 +235,6 @@ class PickupOrdersBehaviour(State):
             self.update_after_pickup(closest_order_warehouse)
         else:
             self.set_next_state(STATE_AVAILABLE)
-
-    async def pickup_orders(self):
-        orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
-        message = Message()
-        message.to = self.agent.next_warehouse + "@localhost"
-        message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
-        message.body = json.dumps(orders_id)
-        await self.send(message)
-        response = await self.receive(timeout=TIMEOUT)
-        if response and response.metadata["performative"] == "confirm":
-            self.agent.logger.log("[PICKUP] - {} Orders picked up at {} - {}".format(len(orders_id), self.agent.next_warehouse, orders_id))
-            self.agent.recharge()
-            for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
-                self.agent.add_order(order)
-            del self.agent.orders_to_be_picked[self.agent.next_warehouse]
-            closest_order_next_warehouse = closest_order(
-                self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
-                self.agent.warehouse_positions[self.agent.next_warehouse]["longitude"],
-                self.agent.next_orders
-            )
-            self.update_after_pickup(closest_order_next_warehouse)
-        else:
-            self.agent.logger.log("[ERROR] - Orders not picked up")
-            self.agent.died_successfully = False
-            self.set_next_state(STATE_DEAD)
 
     def update_after_pickup(self, closest_order_next_warehouse):
         self.agent.next_order = closest_order_next_warehouse

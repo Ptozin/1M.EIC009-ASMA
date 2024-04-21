@@ -109,7 +109,7 @@ class OrdersMatrix:
     
     # ----------------------------------------------------------------------------------------------
     
-    def check_timeout(self) -> None:
+    def check_timeout(self, logger) -> None:
         """
         Check if the timeout for a reservation has expired.
         If so, undo the reservations of the orders.
@@ -118,11 +118,11 @@ class OrdersMatrix:
         
         expired_owners = [owner for owner, timer in self.reserved_orders_timer.items() if current_time - timer > self.__timeout]
         for owner in expired_owners:
-            self.undo_reservations(owner)
+            self.undo_reservations(owner, logger)
     
     # ----------------------------------------------------------------------------------------------
     
-    def select_orders(self, latitude: float, longitude: float, capacity: int, owner : str) -> list[DeliveryOrder]:
+    def select_orders(self, latitude: float, longitude: float, capacity: int, owner : str, logger) -> list[DeliveryOrder]:
         """
         Select orders for a drone based on its capacity and location.
 
@@ -136,7 +136,7 @@ class OrdersMatrix:
         """
         
         # Check timeouts before reserving the order
-        self.check_timeout()
+        self.check_timeout(logger)
         
         # Calculate the cell index for the order
         i, j = self.calculate_cell_index(latitude, longitude)
@@ -239,7 +239,7 @@ class OrdersMatrix:
                             
     # ----------------------------------------------------------------------------------------------
     
-    def undo_reservations(self, owner : str) -> None:
+    def undo_reservations(self, owner : str, logger) -> None:
         """
         Undo the reservations of orders in the matrix.
         Called when a Drone refuses an offer made by the warehouse.
@@ -255,6 +255,7 @@ class OrdersMatrix:
         
         for order, i, j in self.reserved_orders[owner]:
             self.matrix[i, j].append(order)
+            logger.log(f"[UNDO] - Order {order.id} is returned to the matrix")
             
         del self.reserved_orders[owner]
         del self.reserved_orders_timer[owner]

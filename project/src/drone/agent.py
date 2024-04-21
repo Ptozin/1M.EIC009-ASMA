@@ -19,7 +19,7 @@ STATE_PICKUP = "pickup"
 STATE_DELIVER = "deliver"
 STATE_DEAD = "dead"
 
-TIME_MULTIPLIER = 50000.0
+TIME_MULTIPLIER = 500.0
 INTERVAL_BETWEEN_TICKS = 0.030
 
 # ----------------------------------------------------------------------------------------------

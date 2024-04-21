@@ -11,7 +11,7 @@ SUGGEST= "suggest"
 DECIDE = "decide"
 PICKUP = "pickup_orders"
 
-TIMEOUT = 2.0
+TIMEOUT = 5.0
 
 
 # ----------------------------------------------------------------------------------------------
@@ -19,11 +19,11 @@ TIMEOUT = 2.0
 class IdleBehaviour(CyclicBehaviour):
     
     def get_next_behav(self, message : Message) :
-        if len(self.agent.inventory) == 0 and self.agent.orders_to_be_picked == {}:
-            self.agent.logger.log("[IDLE] - No orders to be picked")
+        if len(self.agent.inventory.keys()) == 0 and len(self.agent.orders_to_be_picked.keys()) == 0:
+            self.agent.logger.log(f"[IDLE] - No orders to be picked - {str(message.sender)}")            
             return DismissBehaviour(message=message)
         
-        if message.metadata[METADATA_NEXT_BEHAVIOUR] == SUGGEST:
+        elif message.metadata[METADATA_NEXT_BEHAVIOUR] == SUGGEST:
             capacity = json.loads(message.body)["capacity"]
             return SuggestOrderBehaviour(sender=str(message.sender), drone_capacity=capacity)
         elif message.metadata[METADATA_NEXT_BEHAVIOUR] == DECIDE:
@@ -44,6 +44,7 @@ class IdleBehaviour(CyclicBehaviour):
             b = self.get_next_behav(message)
             if b is not None:
                 self.agent.add_behaviour(b)
+                await b.join()
             else:
                 self.agent.logger.log("[IDLE] - [ERROR] - Next behaviour is None. Ignoring message...")
                 
@@ -60,7 +61,8 @@ class SuggestOrderBehaviour(OneShotBehaviour):
         orders : list[DeliveryOrder] = self.agent.orders_matrix.select_orders(self.agent.position['latitude'],
                                                               self.agent.position['longitude'], 
                                                               self.drone_capacity,
-                                                              self.sender)
+                                                              self.sender,
+                                                              self.agent.logger)
         message : Message = Message()
         message.to = self.sender
         message.set_metadata("performative", "propose")
@@ -96,13 +98,13 @@ class DecideOrdersBehaviour(OneShotBehaviour):
                 del self.agent.inventory[order["id"]]
                 
             # Undo reservations for orders the drone refused, if any
-            self.agent.orders_matrix.undo_reservations(self.sender)
+            self.agent.orders_matrix.undo_reservations(self.sender, self.agent.logger)
             self.agent.logger.log(f"[DECIDING] - Orders remaining in inventory: {len(self.agent.inventory)}")
 
         elif self.message.metadata["performative"] == "reject-proposal":
             self.agent.logger.log(f"[DECIDING] - [REJECTED] - {self.sender}")
             
-            self.agent.orders_matrix.undo_reservations(self.sender)
+            self.agent.orders_matrix.undo_reservations(self.sender, self.agent.logger)
         
 # ----------------------------------------------------------------------------------------------
   
@@ -111,6 +113,7 @@ class PickupOrdersBehaviour(OneShotBehaviour):
         super().__init__()
         self.sender : str = sender
         self.message : Message = message
+        # print("RECEIVE", self.sender, message.body)
         
     async def run(self):
         orders = self.agent.orders_to_be_picked[self.sender]
@@ -118,6 +121,7 @@ class PickupOrdersBehaviour(OneShotBehaviour):
             self.agent.logger.log(f"[PICKUP] - {order} - from {self.sender}")
         
         del self.agent.orders_to_be_picked[self.sender]
+        
         
         message : Message = Message(to=self.sender)
         message.set_metadata("performative", "confirm")
@@ -139,6 +143,8 @@ class DismissBehaviour(OneShotBehaviour):
             self.agent.logger.log(f"[REFUSING] - [MESSAGE] {str(self.message.sender)}")
             message = Message(to=str(self.message.sender))
             message.set_metadata("performative", "refuse")
+            message.set_metadata("Ja foste", "candido")
+                        
             await self.send(message)
         
 # ----------------------------------------------------------------------------------------------
