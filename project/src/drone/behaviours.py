@@ -125,7 +125,7 @@ class OrderSuggestionsBehaviour(State):
     
     async def _process_available_orders(self):
         # TODO: what is the if statement for?
-        winner, orders = self.agent.best_orders() if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
+        winner, orders = self.agent.best_orders() # if self.agent.required_warehouse is None else (self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse])
         if winner:
             await self._send_proposal_accepted(winner, orders)
             self.agent.next_warehouse = winner
