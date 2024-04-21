@@ -55,10 +55,10 @@ class AvailableBehaviour(State):
     async def run(self):
         self.agent.warehouses_responses = []
         warehouses = []
-        if self.agent.required_warehouse is None:
-            warehouses = self.agent.warehouse_positions.keys()
-        else:
-            warehouses = [self.agent.required_warehouse]
+        #if self.agent.required_warehouse is None:
+        warehouses = self.agent.warehouse_positions.keys()
+        #else:
+        #    warehouses = [self.agent.required_warehouse]
         for warehouse in warehouses:
             message = Message()
             message.to = warehouse + "@localhost"
@@ -124,7 +124,8 @@ class OrderSuggestionsBehaviour(State):
             self.agent.orders_to_be_picked[winner] = orders
             self.set_next_state(STATE_PICKUP)
         else:
-            await self._send_proposal_rejected()
+            losers = self.agent.available_order_sets.keys()
+            await self._send_proposal_rejected(losers)
             self.set_next_state(STATE_DELIVER)
     
     async def _send_proposal_accepted(self, winner, orders):
@@ -136,9 +137,11 @@ class OrderSuggestionsBehaviour(State):
         message.body = json.dumps([order.__repr__() for order in orders])
         await self.send(message)
         self.agent.logger.log(f"[DECIDED] - {winner} - {orders}")
+        losers = [warehouse for warehouse in self.agent.available_order_sets.keys() if warehouse != winner]
+        await self._send_proposal_rejected(losers)
     
-    async def _send_proposal_rejected(self):
-        for warehouse in self.agent.available_order_sets.keys():
+    async def _send_proposal_rejected(self, losers):
+        for warehouse in losers:
             message = Message()
             message.to = warehouse + "@localhost"
             message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
@@ -160,8 +163,6 @@ class PickupOrdersBehaviour(State):
         message.to = self.agent.next_warehouse + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, PICKUP)
             
-        print("NEXT WAREHOUSE ", self.agent.next_warehouse)
-        print("ORDERS TO BE PICKED ", self.agent.orders_to_be_picked[self.agent.next_warehouse])
         orders_id = [order.id for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]]
         message.body = json.dumps(orders_id)
                 
@@ -211,7 +212,7 @@ class DeliverOrdersBehaviour(State):
             self.agent.update_position(next_order_lat, next_order_lon)
             await asyncio.sleep(self.agent.tick_rate)
             
-        max_order = self.agent.next_order.id == self.agent.max_deliverable_order.id
+        max_order = self.agent.next_order == self.agent.max_deliverable_order
         self.agent.drop_order()    
         if max_order:
             self.agent.required_warehouse = closest_warehouse(
@@ -219,7 +220,6 @@ class DeliverOrdersBehaviour(State):
                 self.agent.position["longitude"],
                 self.agent.warehouse_positions
             )
-            
             
         self.set_next_state(STATE_AVAILABLE)
 

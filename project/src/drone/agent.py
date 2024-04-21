@@ -32,7 +32,6 @@ class DroneAgent(Agent):
         self.next_order : DeliveryOrder = None
         self.next_warehouse : str = None
         
-        self.required_autonomy : float = 0.0
         self.required_warehouse : str = None # warehouse drone needs to go when autonomy runs out
         self.max_deliverable_order : DeliveryOrder = None # furthest order drone can deliver with autonomy leaving a warehouse
         
@@ -112,9 +111,7 @@ class DroneAgent(Agent):
         """
         Method to recharge the drone.
         """
-        
         warehouse = self.warehouse_positions[self.next_warehouse]
-        
         self.params.refill_autonomy(warehouse)
 
     def update_position(self, target_latitude : float, target_longitude : float) -> None:
@@ -132,10 +129,10 @@ class DroneAgent(Agent):
         self.__distance_since_last_drop += distance
         self.params.update_distance(distance)
                     
-        self.params.curr_autonomy -= haversine_distance(
-            self.position['latitude'], self.position['longitude'],
-            position['latitude'], position['longitude']
-        )
+        #self.params.curr_autonomy -= haversine_distance(
+        #    self.position['latitude'], self.position['longitude'],
+        #    position['latitude'], position['longitude']
+        #)
         
         self.position = position
         
@@ -247,6 +244,11 @@ class DroneAgent(Agent):
     # ----------------------------------------------------------------------------------------------
     
     def tasks_in_range(self) -> None:
+        '''
+        Method that checks the furthest order that can be delivered with autonomy, after having next orders defined in a warehouse.
+        '''
+        self.required_warehouse = None
+        self.max_deliverable_order = None
         distance_max_order = 0.0
         current_position = self.position
         for order in self.next_orders:
@@ -272,6 +274,8 @@ class DroneAgent(Agent):
             if total_required_distance <= self.params.curr_autonomy:
                 self.max_deliverable_order = order
                 break
+        if self.max_deliverable_order == self.next_orders[-1]:
+            self.max_deliverable_order = None
     
     # ----------------------------------------------------------------------------------------------
 
@@ -330,7 +334,7 @@ class DroneAgent(Agent):
             if new_utility >= drone_utility:
                 winner = warehouse
                 drone_utility = new_utility  
-        
+                
         return (winner, self.available_order_sets[winner] if winner else [])
         
 # ----------------------------------------------------------------------------------------------
