@@ -1,8 +1,7 @@
 
 import json
-from spade.behaviour import CyclicBehaviour, OneShotBehaviour, FSMBehaviour, State
+from spade.behaviour import CyclicBehaviour, OneShotBehaviour
 from order import DeliveryOrder
-from warehouse.utils import OrdersMatrix
 from spade.message import Message
 
 # ----------------------------------------------------------------------------------------------
