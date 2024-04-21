@@ -274,6 +274,7 @@ class DroneAgent(Agent):
             total_required_distance = distance_max_order + distance_order_to_warehouse
             if total_required_distance <= self.params.curr_autonomy:
                 self.max_deliverable_order = order
+            else:
                 break
         
         if self.max_deliverable_order == self.next_orders[-1]:
