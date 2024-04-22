@@ -1,3 +1,5 @@
+# ----------------------------------------------------------------------------------------------
+
 import asyncio
 from spade.behaviour import PeriodicBehaviour, FSMBehaviour, State
 from spade.message import Message
@@ -20,7 +22,6 @@ SUGGEST_ORDER = "suggest"
 DECIDE = "decide"
 PICKUP = "pickup_orders"
 RECHARGE_DRONE = "recharge"
-
 
 METADATA_NEXT_BEHAVIOUR = "next_behaviour"
 
@@ -58,6 +59,12 @@ class FSMBehaviour(FSMBehaviour):
 # ----------------------------------------------------------------------------------------------
 
 class AvailableBehaviour(State):
+    '''
+    The drone is available to receive orders
+    
+    Args:
+        State (State): Base class for states
+    '''
     async def run(self):
         self.agent.warehouses_responses = []
         
@@ -94,6 +101,12 @@ class AvailableBehaviour(State):
 # ----------------------------------------------------------------------------------------------
 
 class OrderSuggestionsBehaviour(State):
+    '''
+    The drone receives order suggestions from warehouses and decides which orders to pick up
+    
+    Args:
+        State (State): Base class for states
+    '''
     async def run(self):
         self.agent.available_order_sets = {}
         responses = self.agent.warehouses_responses
@@ -124,7 +137,14 @@ class OrderSuggestionsBehaviour(State):
             self.agent.died_successfully = True
             self.set_next_state(STATE_DEAD)
     
-    def _handle_proposal(self, response, sender):
+    def _handle_proposal(self, response : Message, sender : str):
+        '''
+        Handle the proposal response from the warehouse
+        
+        Args:
+            response (Message): The response message from the warehouse
+            sender (str): The id of the warehouse
+        '''
         self.agent.logger.log(f"[PROPOSED] - {sender}")
         proposed_orders = json.loads(response.body)
         orders = [DeliveryOrder(**json.loads(order)) for order in proposed_orders]
@@ -138,12 +158,25 @@ class OrderSuggestionsBehaviour(State):
             self.agent.params.max_autonomy
         )
     
-    def _handle_refusal(self, sender):
+    def _handle_refusal(self, sender : str):
+        '''
+        Handle the refusal response from the warehouse
+        
+        Args:
+            sender (str): The id of the warehouse
+        '''
         self.agent.logger.log(f"[REFUSED] - {sender}")
         self.agent.remove_warehouse(sender)
     
     async def _process_available_orders(self):
-        winner, orders = self.agent.best_orders()
+        '''
+        Process the available orders and decide which orders to pick up
+        '''
+        winner, orders = None, None
+        if self.agent.required_warehouse is None:
+            winner, orders = self.agent.best_orders()
+        else:
+            winner, orders = self.agent.required_warehouse, self.agent.available_order_sets[self.agent.required_warehouse]
         
         if winner:
             await self._send_proposal_accepted(winner, orders)
@@ -155,7 +188,14 @@ class OrderSuggestionsBehaviour(State):
             await self._send_proposal_rejected(losers)
             self.set_next_state(STATE_DELIVER)
     
-    async def _send_proposal_accepted(self, winner, orders):
+    async def _send_proposal_accepted(self, winner : str, orders : list[DeliveryOrder]):
+        '''
+        Send the proposal accepted message to the winner warehouse
+        
+        Args:
+            winner (str): The id of the warehouse
+            orders (list[DeliveryOrder]): The orders to be picked up
+        '''
         message = Message()
         message.to = winner + "@localhost"
         message.set_metadata(METADATA_NEXT_BEHAVIOUR, DECIDE)
@@ -166,7 +206,13 @@ class OrderSuggestionsBehaviour(State):
         losers = [warehouse for warehouse in self.agent.available_order_sets.keys() if warehouse != winner]
         await self._send_proposal_rejected(losers)
     
-    async def _send_proposal_rejected(self, losers):
+    async def _send_proposal_rejected(self, losers : list[str]):
+        '''
+        Send the proposal rejected message to the loser warehouses
+        
+        Args:
+            losers (list[str]): The ids of the loser warehouses
+        '''
         for warehouse in losers:
             message = Message()
             message.to = warehouse + "@localhost"
@@ -178,6 +224,12 @@ class OrderSuggestionsBehaviour(State):
 # ----------------------------------------------------------------------------------------------
 
 class PickupOrdersBehaviour(State):
+    '''
+    The drone returns and picks up the orders from the warehouse
+    
+    Args:
+        State (State): Base class for states
+    '''
     async def run(self):
         while not self.agent.arrived_at_next_warehouse():
             next_warehouse_lat, next_warehouse_lon = self.agent.get_next_warehouse_position()
@@ -226,6 +278,9 @@ class PickupOrdersBehaviour(State):
                 self.set_next_state(STATE_DEAD)
                 
     def handle_no_orders_to_pick(self):
+        '''
+        Handle the case when there are no orders to pick up
+        '''
         if self.agent.next_orders:
             closest_order_warehouse = closest_order(
                 self.agent.warehouse_positions[self.agent.next_warehouse]["latitude"],
@@ -236,7 +291,13 @@ class PickupOrdersBehaviour(State):
         else:
             self.set_next_state(STATE_AVAILABLE)
 
-    def update_after_pickup(self, closest_order_next_warehouse):
+    def update_after_pickup(self, closest_order_next_warehouse : DeliveryOrder):
+        '''
+        Update the state after the orders have been picked up
+        
+        Args:
+            closest_order_next_warehouse (DeliveryOrder): The closest order to the next warehouse
+        '''
         self.agent.next_order = closest_order_next_warehouse
         self.agent.next_orders = generate_path(self.agent.next_orders, closest_order_next_warehouse)
         self.agent.tasks_in_range()
@@ -245,6 +306,12 @@ class PickupOrdersBehaviour(State):
 # ----------------------------------------------------------------------------------------------
 
 class DeliverOrdersBehaviour(State):
+    '''
+    The drone delivers the orders
+    
+    Args:
+        State (State): Base class for states
+    '''
     async def run(self):  
         if not self.agent.has_inventory():
             self.agent.logger.log("[DELIVERING] - No orders to deliver")
@@ -276,13 +343,19 @@ class DeliverOrdersBehaviour(State):
         if len(self.agent.warehouse_positions) == 0:
             self.agent.logger.log("[DELIVERING] - No warehouses left - Continuing to deliver orders...")
         
-        # Even if there are no warehouses left, the drone will be sent to the available state
-        # There, it will check if there are any orders left to deliver and come back to this state
+        # even if there are no warehouses left, the drone will be sent to the available state
+        # there, it will check if there are any orders left to deliver and come back to this state
         self.set_next_state(STATE_AVAILABLE)
 
 # ----------------------------------------------------------------------------------------------
 
 class DeadBehaviour(State):
+    '''
+    The drone has died
+    
+    Args:
+        State (State): Base class for states
+    '''
     async def run(self):
         if self.agent.died_successfully:
             self.agent.logger.log("[DEAD BEHAVIOUR] - Drone successfully completed its mission.")
@@ -292,6 +365,12 @@ class DeadBehaviour(State):
 # ----------------------------------------------------------------------------------------------
 
 class EmitPositionBehaviour(PeriodicBehaviour):
+    '''
+    Periodically emit the drone's position
+    
+    Args:
+        PeriodicBehaviour (PeriodicBehaviour): Base class for periodic behaviours
+    '''
     async def run(self):
         data = [order.get_order_for_visualization() for order in self.agent.orders_to_visualize]
         self.agent.orders_to_visualize = []

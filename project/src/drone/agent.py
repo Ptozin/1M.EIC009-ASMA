@@ -254,7 +254,7 @@ class DroneAgent(Agent):
         self.logger.log(f"[DELIVERING] - Order {order.id} delivered")
         self.params.drop_order(order.weight, self.__distance_since_last_drop,  order.get_order_destination_position())
         
-        # Only append the order to the total orders list if it has been delivered
+        # only append the order to the total orders list if it has been delivered
         self.total_orders.append(order)
         
         order.mark_as_delivered()

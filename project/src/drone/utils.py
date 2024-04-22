@@ -8,11 +8,33 @@ from misc.distance import haversine_distance
 # ---------------------------------------------------------------------------------------------
 
 def arrived_to_target(position, target_lat : float, target_lon : float) -> bool:
+    '''
+    Check if the drone has arrived to the target position
+    
+    Args:
+        position (dict): Drone's current position
+        target_lat (float): Target latitude
+        target_lon (float): Target longitude
+    
+    Returns:
+        bool: True if the drone has arrived to the target position, False otherwise
+    '''
     return position['latitude'] == target_lat and position['longitude'] == target_lon
 
 # ---------------------------------------------------------------------------------------------
 
 def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> DeliveryOrder:
+    '''
+    Find the closest order to the given position
+    
+    Args:
+        latitude (float): Latitude of the given position
+        longitude (float): Longitude of the given position
+        orders (list[DeliveryOrder]): List of orders
+        
+    Returns:
+        DeliveryOrder: The closest order to the given position
+    '''
     min_dist = float('inf')
     closest = None
     for order in orders:
@@ -30,6 +52,17 @@ def closest_order(latitude, longitude, orders : list[DeliveryOrder]) -> Delivery
 # ---------------------------------------------------------------------------------------------
 
 def closest_warehouse(latitude, longitude, warehouse_positions : dict) -> str:
+    '''
+    Find the closest warehouse to the given position
+    
+    Args:
+        latitude (float): Latitude of the given position
+        longitude (float): Longitude of the given position
+        warehouse_positions (dict): Dictionary of warehouse positions
+        
+    Returns:
+        str: The id of the closest warehouse to the given position
+    '''
     min_dist = float('inf')
     closest = None
     for warehouse_id, position in warehouse_positions.items():
@@ -47,6 +80,16 @@ def closest_warehouse(latitude, longitude, warehouse_positions : dict) -> str:
 # ---------------------------------------------------------------------------------------------
 
 def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> list[DeliveryOrder]:
+    '''
+    Generate a path that visits all the given orders starting from the first order
+    
+    Args:
+        orders (list[DeliveryOrder]): List of orders
+        first_order (DeliveryOrder): The first order to start from
+        
+    Returns:
+        list[DeliveryOrder]: The generated path
+    '''
     if not orders:
         return []
     start_order = first_order
@@ -80,6 +123,15 @@ def generate_path(orders: list[DeliveryOrder], first_order: DeliveryOrder) -> li
 # ---------------------------------------------------------------------------------------------
 
 def calculate_travel_distance(path : list[DeliveryOrder]) -> float:
+    '''
+    Calculate the total travel distance of the given path
+    
+    Args:
+        path (list[DeliveryOrder]): List of orders in the path
+        
+    Returns:
+        float: The total travel distance of the given path
+    '''
     if len(path) < 2:
         return 0.0
     total_distance = 0.0
@@ -97,6 +149,16 @@ def calculate_travel_distance(path : list[DeliveryOrder]) -> float:
 # ---------------------------------------------------------------------------------------------
 
 def calculate_capacity_level(orders: list[DeliveryOrder], max_capacity: int) -> float:
+    '''
+    Calculate the capacity level of the given orders
+    
+    Args:
+        orders (list[DeliveryOrder]): List of orders
+        max_capacity (int): Maximum capacity of the drone
+        
+    Returns:
+        float: The capacity level of the given orders
+    '''
     total_weight = sum(order.weight for order in orders)
     capacity_level = total_weight / max_capacity
     return min(capacity_level, 1.0)
@@ -104,6 +166,18 @@ def calculate_capacity_level(orders: list[DeliveryOrder], max_capacity: int) -> 
 # ---------------------------------------------------------------------------------------------
 
 def utility(num_orders: int, travel_distance: float, autonomy: float, capacity_level: float) -> float:
+    '''
+    Calculate the utility of a set of orders
+    
+    Args:
+        num_orders (int): Number of orders
+        travel_distance (float): Total travel distance
+        autonomy (float): Drone's autonomy
+        capacity_level (float): Capacity level
+        
+    Returns:
+        float: The utility of the given set of orders
+    '''
     if num_orders == 0:
         return float('-inf')
     capacity_utility = capacity_level
@@ -117,6 +191,16 @@ def utility(num_orders: int, travel_distance: float, autonomy: float, capacity_l
 # ---------------------------------------------------------------------------------------------
 
 def combine_orders(orders: list[DeliveryOrder], capacity: int) -> list[list[DeliveryOrder]]:
+    '''
+    Generate all possible combinations of orders that fit the given capacity
+    
+    Args:
+        orders (list[DeliveryOrder]): List of orders
+        capacity (int): Maximum capacity of the drone
+        
+    Returns:
+        list[list[DeliveryOrder]]: All possible combinations of orders that fit the given capacity
+    '''
     valid_combinations = []
     for r in range(1, len(orders) + 1):
         valid_combinations.extend(
@@ -127,6 +211,19 @@ def combine_orders(orders: list[DeliveryOrder], capacity: int) -> list[list[Deli
 # ---------------------------------------------------------------------------------------------
 
 def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, autonomy: float) -> list[DeliveryOrder]:
+    '''
+    Find the best set of orders that maximizes the utility
+    
+    Args:
+        orders (list[DeliveryOrder]): List of orders
+        latitude (float): Latitude of the drone's current position
+        longitude (float): Longitude of the drone's current position
+        capacity (int): Maximum capacity of the drone
+        autonomy (float): Drone's autonomy
+        
+    Returns:
+        list[DeliveryOrder]: The best set of orders that maximizes the utility
+    '''
     order_sets = combine_orders(orders, capacity)
     best_set = None
     best_utility = float('-inf')
