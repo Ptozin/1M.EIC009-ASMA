@@ -245,3 +245,23 @@ def best_available_orders(orders: list[DeliveryOrder], latitude: float, longitud
     return best_set
 
 # ----------------------------------------------------------------------------------------------
+
+def suboptimal_available_orders(orders: list[DeliveryOrder], latitude: float, longitude: float, capacity: int, autonomy: float) -> list[DeliveryOrder]:
+    '''
+    Find the some set of orders (without utility)
+    
+    Args:
+        orders (list[DeliveryOrder]): List of orders
+        capacity (int): Maximum capacity of the drone
+        
+    Returns:
+        list[DeliveryOrder]: Some set of orders
+    '''
+    order_sets = combine_orders(orders, capacity)
+    final_set = None
+    for order_set in order_sets:
+        final_set = order_set
+        break
+    return final_set
+
+# ----------------------------------------------------------------------------------------------

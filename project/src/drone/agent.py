@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------------------------------------
 
 import json
+import random
 from spade.agent import Agent
 
 from order import DeliveryOrder
@@ -88,6 +89,7 @@ class DroneAgent(Agent):
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_PICKUP)
         fsm.add_transition(source=STATE_SUGGEST, dest=STATE_DELIVER)
         fsm.add_transition(source=STATE_PICKUP, dest=STATE_DELIVER)
+        fsm.add_transition(source=STATE_PICKUP, dest=STATE_AVAILABLE)
         fsm.add_transition(source=STATE_DELIVER, dest=STATE_AVAILABLE)
 
         # State transitions to dead state
@@ -365,5 +367,18 @@ class DroneAgent(Agent):
                 drone_utility = new_utility
                 
         return (winner, self.available_order_sets[winner] if winner else [])
+    
+    def suboptimal_orders(self) -> tuple[None|str, list[DeliveryOrder]]:
+        """
+        Method to select some orders for the drone from the available warehouses (without utility).
+
+        Returns:
+            tuple[None|str, list[DeliveryOrder]]: The warehouse id and the list of orders to pick up.
+        """
+        valid_keys = [key for key, value in self.available_order_sets.items() if value is not None]
+        if not valid_keys:
+            return None, []
+        warehouse = random.choice(valid_keys)
+        return warehouse, self.available_order_sets[warehouse]
         
 # ----------------------------------------------------------------------------------------------

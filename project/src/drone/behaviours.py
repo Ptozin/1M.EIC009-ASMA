@@ -243,6 +243,7 @@ class PickupOrdersBehaviour(State):
             
             await asyncio.sleep(self.agent.tick_rate)
 
+        self.agent.recharge()
         if self.agent.orders_to_be_picked[self.agent.next_warehouse] is None:
             self.handle_no_orders_to_pick()
         else:
@@ -258,7 +259,6 @@ class PickupOrdersBehaviour(State):
             
             if response and response.metadata["performative"] == "confirm":
                 self.agent.logger.log("[PICKUP] - {} Orders picked up at {} - {}".format(len(orders_id), self.agent.next_warehouse, orders_id))
-                self.agent.recharge()
                 
                 for order in self.agent.orders_to_be_picked[self.agent.next_warehouse]:
                     self.agent.add_order(order)
