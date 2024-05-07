@@ -1,7 +1,3 @@
-spade
-docker
-pandas
-flask
-requests
-flask-socketio
-ipykernel
+gym[box2d]
+stable_baselines3
+shimmy>=0.2.1

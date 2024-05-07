@@ -1,4 +1,4 @@
-# Detect OS
+# detect OS
 ifeq ($(OS),Windows_NT)
     # Windows settings
     PYTHON = python
@@ -15,28 +15,22 @@ else
     SCRIPTS = bin
 endif
 
-ARGS = original
-
-# Main target
+# main target
 all: install
 
-# Create a virtual environment
+# create a virtual environment
 venv:
 	uv venv
 	.venv$(SEP)$(SCRIPTS)$(SEP)activate
 
-# Install project dependencies using uv
+# install project dependencies using uv
 install: venv
 	uv $(PIP) install -r requirements.txt
-	uv $(PIP) install -e src$(SEP)misc$(SEP)
 
 run:
-	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)main.py -d $(ARGS)
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)main.py
 
-visualization:
-	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)visualization.py
-
-# Clean up generated files and virtual environment
+# clean up generated files and virtual environment
 
 clean:
 	$(RM) .venv

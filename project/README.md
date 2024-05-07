@@ -9,7 +9,7 @@
 
 ### Description
 
-You can find the project's description [here](description/trabalho1.pdf).
+You can find the project's description [here](description/assignment2.pdf).
 
 ### How to run
 
