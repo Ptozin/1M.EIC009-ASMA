@@ -25,10 +25,19 @@ venv:
 
 # install project dependencies using uv
 install: venv
-	uv $(PIP) install -r requirements.txt
+	uv pip install -r requirements.txt
 
 run:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)main.py
+
+train:
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)train.py
+
+load:
+	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)load.py
+
+tensorboard:
+	tensorboard --logdir=logs
 
 # clean up generated files and virtual environment
 
