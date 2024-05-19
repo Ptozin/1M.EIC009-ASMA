@@ -54,10 +54,10 @@ The values we will be using are the following:
 ```json
 {
     "LunarLander-v2" : {
-        "gravity"           : -1.62,    // moon's gravity
+        "gravity"           : -5.0,
         "enable_wind"       : true,     // enabling wind, although it's not present in the moon
-        "wind_power"        : 15.0,
-        "turbulence_power"  : 1.5
+        "wind_power"        : 5.0,
+        "turbulence_power"  : 0.5
     }
 }
 ```
@@ -75,5 +75,16 @@ make
 
 # wait for the dependencies to be installed in the .venv folder --
 
-make run # to run the project
+make train # to train the models - up to 5 models will be trained
+
+make tensorboard # to visualize the training process
+
+make test # to test the models - creates a video in `videos/` folder for each model
+
+make run # to load the best model and visualize it
+```
+
+If you get an error regarding tensor, follow the [instructions](https://pytorch.org/get-started/locally/) regarding the installation of the pytorch library. Remember that the .venv folder is created with `uv`, so to install in the environment you should use the following command, as an example for CUDA 11.1 and Windows:
+```bash
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
