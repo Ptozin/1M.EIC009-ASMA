@@ -3,7 +3,7 @@ from stable_baselines3 import PPO
 
 models_dir = "models/PPO"
 
-env = gym.make('LunarLander-v2', render_mode='human')  # continuous: LunarLanderContinuous-v2
+env = gym.make('LunarLander-v2', render_mode='human')
 env.reset()
 
 model_path = f"{models_dir}/290000.zip"

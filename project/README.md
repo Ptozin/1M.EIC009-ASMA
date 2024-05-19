@@ -33,6 +33,23 @@ In order to see the updates in real-time, you should go to the `scalars` tab, th
 
 You can find the project's description [here](description/assignment2.pdf).
 
+To train, simply run the following command:
+```bash
+make train
+```
+
+It will load the `env_params.json` file with the environment parameters and train the model with the specified parameters, the default values for `LunarLander-v2` are:
+```json
+{
+    "LunarLander-v2" : {
+        "gravity"           : -10.0,    // bounded between 0 and -12.0
+        "enable_wind"       : false,
+        "wind_power"        : 15.0,     // recommended between 0.0 and 20.0
+        "turbulence_power"  : 1.5       // recommended between 0.0 and 2.0
+    }
+}
+```
+
 ### How to run
 
 In order to run the project you should have python installed in your machine and the `uv` package in order to install the project's dependencies:
