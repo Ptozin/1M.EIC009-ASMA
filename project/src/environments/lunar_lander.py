@@ -9,20 +9,8 @@ class CustomLunarLander:
             render_mode (str): Mode to render the environment. Defaults to None. Needs to be set to 'human' to render the environment.
             **kwargs: Additional parameters to customize the environment.
         """
-        self.env = gym.make('LunarLander-v2', render_mode=render_mode)
+        self.env = gym.make('LunarLander-v2', render_mode=render_mode, **kwargs)
         self.env.reset()
-        
-        self.__update_parameters(**kwargs)
-    
-    def __update_parameters(self, **kwargs):
-        """
-        Update the environment parameters.
-        
-        Args:
-            **kwargs: Parameters to update the environment.
-        """
-        for key, value in kwargs.items():
-            setattr(self.env, key, value)
 
     def reset(self):
         """

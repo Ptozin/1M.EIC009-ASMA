@@ -50,6 +50,18 @@ It will load the `env_params.json` file with the environment parameters and trai
 }
 ```
 
+The values we will be using are the following:
+```json
+{
+    "LunarLander-v2" : {
+        "gravity"           : -1.62,    // moon's gravity
+        "enable_wind"       : true,     // enabling wind, although it's not present in the moon
+        "wind_power"        : 15.0,
+        "turbulence_power"  : 1.5
+    }
+}
+```
+
 ### How to run
 
 In order to run the project you should have python installed in your machine and the `uv` package in order to install the project's dependencies:

@@ -30,10 +30,12 @@ install: venv
 run:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)main.py
 
+# To train the models, run the following command
 train:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)train.py
 
-load:
+# To test the models, run the following command, reminder: change manually the model path, according to tensorboard logs!
+test:
 	.$(SEP).venv$(SEP)$(SCRIPTS)$(SEP)$(PYTHON) src$(SEP)load.py
 
 tensorboard:
