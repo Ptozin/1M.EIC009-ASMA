@@ -46,6 +46,8 @@ tensorboard:
 clean:
 	$(RM) .venv
 	$(RM) src$(SEP)__pycache__
+	$(RM) src$(SEP)models$(SEP)__pycache__
+	$(RM) src$(SEP)environments$(SEP)__pycache__
 	$(RM) __pycache__
 
 # PHONY targets (targets that don't represent files)
