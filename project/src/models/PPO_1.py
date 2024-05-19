@@ -35,5 +35,5 @@ class PPO_1(ModelTrainer):
             tensorboard_log=self.log_dir,
             # New parameters
             gamma=0.98,
-            gae_lambda=0.90,
+            gae_lambda=0.97,
         )
