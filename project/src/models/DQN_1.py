@@ -1,11 +1,11 @@
 import os
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from . import ModelTrainer
 
-class PPO_1(ModelTrainer):
+class DQN_1(ModelTrainer):
     """
-    Custom ModelTrainer class for the PPO model.
-    Runs an updated PPO model.
+    Custom ModelTrainer class for the DQN model.
+    Runs the default DQN model.
     """
     def __init__(self, env_params={}, model_dir="models/", log_dir="logs", timesteps=10000, total_iterations=30):
         """
@@ -19,25 +19,21 @@ class PPO_1(ModelTrainer):
             total_iterations (int): Total number of training iterations.
         """
         super().__init__(env_params, timesteps, total_iterations)
-        self.model_dir = model_dir + "PPO_1/"
+        self.model_dir = model_dir + "DQN_1/"
         self.log_dir = log_dir
         self.timesteps = timesteps
         self.total_iterations = total_iterations
-        self.tb_log_name = "PPO_1"
+        self.tb_log_name = "DQN_1"
 
         os.makedirs(self.model_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
         
-        self.model = PPO(
+        self.model = DQN(
             'MlpPolicy', 
             self.env.env, 
+            verbose=1, 
             tensorboard_log=self.log_dir,
-            # New parameters
-            n_steps=512,
             batch_size=64,
-            n_epochs=5,
-            gamma=0.999,
-            gae_lambda=0.98,
-            ent_coef=0.01,
-            verbose=0, 
+            learning_rate=0.0005,
+            tau=0.001,
         )

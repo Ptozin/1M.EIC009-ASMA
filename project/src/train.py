@@ -4,9 +4,10 @@ import signal
 import sys
 import torch
 from models.PPO_0 import PPO_0 as Trainer_PPO_0
+from models.PPO_1 import PPO_1 as Trainer_PPO_1
 from models.A2C_0 import A2C_0 as Trainer_A2C_0
 from models.DQN_0 import DQN_0 as Trainer_DQN_0
-from models.PPO_1 import PPO_1 as Trainer_PPO_1
+from models.DQN_1 import DQN_1 as Trainer_DQN_1
 
 def load_env_params(file_path):
     with open(file_path, "r") as file:
@@ -24,7 +25,7 @@ def get_default_device():
         return torch.device('cpu')
 
 def train_model(trainer_class, env_params):
-    trainer = trainer_class(env_params=env_params, total_iterations=100)
+    trainer = trainer_class(env_params=env_params, total_iterations=200)
     trainer.train()
 
 def signal_handler(sig, frame):
@@ -42,9 +43,10 @@ if __name__ == "__main__":
     
     trainers = [
         Trainer_PPO_0,
+        Trainer_PPO_1,
         Trainer_A2C_0,
         Trainer_DQN_0,
-        Trainer_PPO_1
+        Trainer_DQN_1
     ]
     
     processes = []

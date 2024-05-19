@@ -26,7 +26,13 @@ def evaluate(env : CustomLunarLander, model : PPO | A2C | DQN, episodes = 10):
 def record_video(model, video_length=500, prefix="", video_folder="videos/", **env_params):
         eval_env = DummyVecEnv([lambda: gym.make("LunarLander-v2",
                                                  render_mode="rgb_array",
-                                                 **env_params)])
+                                                 #**env_params, # comment if needed
+                                                 gravity=-5, # comment if needed
+                                                 enable_wind=True, # comment if needed
+                                                 wind_power=20.0, # comment if needed
+                                                 turbulence_power=1.0, # comment if needed
+                                                 
+                                                 )])
         # Start the video at step=0 and record 500 steps
         eval_env = VecVideoRecorder(
             eval_env,
@@ -67,19 +73,26 @@ def load_dqn_0(env_params, models_dir, time_step):
     env = CustomLunarLander(render_mode='human', **env_params)
     model = DQN.load(model_path, env=env.env)
     return model
+
+def load_dqn_1(env_params, models_dir, time_step):
+    model_path = f"{models_dir}/DQN_1/{time_step}.zip"
+    env = CustomLunarLander(render_mode='human', **env_params)
+    model = DQN.load(model_path, env=env.env)
+    return model
  
 if __name__ == "__main__":
     env_params = load_env_params("env_params.json")
     
     models_dir = "models"
-    time_step = 1000_000
+    time_step = 1250_000
     
     models = []
     
-    models.append((load_dqn_0(env_params, models_dir, time_step), "ppo_0-LunarLander"))
-    models.append((load_a2c_0(env_params, models_dir, time_step), "ppo_1-LunarLander"))
-    models.append((load_ppo_0(env_params, models_dir, time_step), "a2c_0-LunarLander"))
-    models.append((load_ppo_1(env_params, models_dir, time_step), "dqn_0-LunarLander"))
+    models.append((load_ppo_0(env_params, models_dir, time_step), "ppo_0-LunarLander-wind-20"))
+    # models.append((load_ppo_1(env_params, models_dir, time_step), "ppo_1-LunarLander"))
+    #models.append((load_a2c_0(env_params, models_dir, time_step), "a2c_0-LunarLander"))
+    #models.append((load_dqn_0(env_params, models_dir, time_step), "dqn_0-LunarLander"))
+    #models.append((load_dqn_1(env_params, models_dir, time_step), "dqn_1-LunarLander"))
     
     for model, prefix in models:
         record_video(model = model, video_length=1500, prefix=prefix, video_folder="videos/", **env_params)
