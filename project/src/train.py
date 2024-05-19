@@ -17,14 +17,14 @@ def load_env_params(file_path):
 def get_default_device():
     """Pick GPU if available, else CPU"""
     if torch.cuda.is_available():
-        print("Using GPU")
+        print("Using GPU as default device")
         return torch.device('cuda')
     else:
-        print("Using CPU")
+        print("Using CPU as default device")
         return torch.device('cpu')
 
 def train_model(trainer_class, env_params):
-    trainer = trainer_class(env_params=env_params, total_iterations=2)
+    trainer = trainer_class(env_params=env_params, total_iterations=100)
     trainer.train()
 
 def signal_handler(sig, frame):
@@ -35,8 +35,6 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
     get_default_device()
-    exit(0)
-    
     
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -44,9 +42,9 @@ if __name__ == "__main__":
     
     trainers = [
         Trainer_PPO_0,
-        # Trainer_A2C_0,
-        # Trainer_DQN_0,
-        # Trainer_PPO_1
+        Trainer_A2C_0,
+        Trainer_DQN_0,
+        Trainer_PPO_1
     ]
     
     processes = []
