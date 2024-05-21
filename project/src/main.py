@@ -9,7 +9,7 @@ def load_env_params(file_path):
 
 def evaluate(env : CustomLunarLander, model : PPO, episodes = 10):
     for ep in range(episodes):
-        cummulative_reward = 0
+        cumulative_reward = 0
         obs, _ = env.reset()
         done = False
         while not done:
@@ -17,8 +17,8 @@ def evaluate(env : CustomLunarLander, model : PPO, episodes = 10):
             obs, rewards, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             env.render()
-            cummulative_reward += rewards
-            print(cummulative_reward)
+            cumulative_reward += rewards
+            print(cumulative_reward)
 
     env.close()
     
