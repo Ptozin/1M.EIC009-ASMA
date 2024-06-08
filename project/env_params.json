@@ -1,8 +1,0 @@
-{
-    "LunarLander-v2" : {
-        "gravity"           : -10.0,
-        "enable_wind"       : true,
-        "wind_power"        : 5.0,
-        "turbulence_power"  : 0.5
-    }
-}
