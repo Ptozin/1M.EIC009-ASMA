@@ -1,4 +1,4 @@
-# Project 2: Reinforcement learning agents
+# Project 2: Reinforcement Learning Agents
 
 ## Group G2
 

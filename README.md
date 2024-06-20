@@ -51,7 +51,7 @@ make visualization # visualize the simulation in the browser on a map
     </video>
 </div>
 
-## Project 2: Multi-agent delivery system using drones 
+## Project 2: Reinforcement Learning Agents
 
 ### **Grade - 18.2**
 
