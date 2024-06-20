@@ -1,0 +1,6 @@
+spade
+docker
+pandas
+flask
+requests
+flask-socketio

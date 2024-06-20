@@ -1,0 +1,6 @@
+gym[box2d]
+gym[toy_text]
+stable_baselines3
+shimmy>=0.2.1
+tensorboard
+moviepy
